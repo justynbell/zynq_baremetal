@@ -1,0 +1,6 @@
+the_ROM_image:
+{
+    [bootloader] fsbl/fsbl.elf
+    system.bit
+    app/app.elf
+}
