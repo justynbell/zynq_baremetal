@@ -1,0 +1,72 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug APP",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/openocd",
+            "executable": "${workspaceFolder}/app/app.elf",
+            "servertype": "openocd",
+            "gdbPath": "/usr/bin/gdb-multiarch",
+            "configFiles": [
+                "${workspaceFolder}/openocd/arty-z7.cfg"
+            ],
+            "searchDir": [
+                "${workspaceFolder}/openocd"
+            ],
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "raw",
+            "overrideLaunchCommands": [
+                "monitor pld load 0 ${workspaceFolder}/system.bit",
+                "monitor sleep 1000", 
+                "monitor reset init",
+                "monitor sleep 1000", 
+                "load",
+            ]
+        },
+        {
+            "name": "Debug APP (no bitstream)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/openocd",
+            "executable": "${workspaceFolder}/app/app.elf",
+            "servertype": "openocd",
+            "gdbPath": "/usr/bin/gdb-multiarch",
+            "configFiles": [
+                "${workspaceFolder}/openocd/arty-z7.cfg"
+            ],
+            "searchDir": [
+                "${workspaceFolder}/openocd"
+            ],
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "raw",
+            "overrideLaunchCommands": [
+                "monitor reset init",
+                "monitor sleep 1000",
+                "load",
+            ]
+        },
+        {
+            "name": "Debug FSBL",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/openocd",
+            "executable": "${workspaceFolder}/fsbl/fsbl.elf",
+            "servertype": "openocd",
+            "gdbPath": "/usr/bin/gdb-multiarch",
+            "configFiles": [
+                "${workspaceFolder}/openocd/arty-z7.cfg"
+            ],
+            "searchDir": [
+                "${workspaceFolder}/openocd"
+            ],
+            "runToEntryPoint": "main",
+            "showDevDebugOutput": "raw",
+            "overrideLaunchCommands": [
+                "monitor reset halt",
+                "load"
+            ]
+        }
+    ]
+}

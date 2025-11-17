@@ -1,0 +1,6 @@
+*.o
+*.d
+BOOT.BIN
+bsp/ps7_cortexa9_0/lib/
+fsbl/fsbl.elf
+app/app.elf
