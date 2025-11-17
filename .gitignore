@@ -1,6 +1,7 @@
 *.o
 *.d
 BOOT.BIN
-bsp/ps7_cortexa9_0/lib/
+bsp/ps7_cortexa9_0/lib/*
+!bsp/ps7_cortexa9_0/lib/.keep
 fsbl/fsbl.elf
 app/app.elf
