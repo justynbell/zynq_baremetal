@@ -2,7 +2,7 @@ BSP_PATH = ../bsp
 CC := arm-none-eabi-gcc
 CFLAGS := -Wall -O0 -g3 -fmessage-length=0
 CC_FLAGS := -MMD -MP -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard
-LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -lxil -lgcc -lc -Wl,--end-group
+LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -lxil -lgcc -lc -lm -Wl,--end-group
 
 c_SOURCES := $(wildcard *.c)
 S_SOURCES := $(wildcard *.S)
@@ -19,7 +19,7 @@ EXEC := app.elf
 INCLUDEPATH := -I$(BSP_PATH)/ps7_cortexa9_0/include -I.
 LIBPATH := -L$(BSP_PATH)/ps7_cortexa9_0/lib -L./
 
-all: $(EXEC)
+all: $(EXEC) size
 
 $(EXEC): $(OBJS) $(INCLUDES)
 	$(CC) -o $@ $(sort $(OBJS)) $(CC_FLAGS) $(CFLAGS) $(LN_FLAGS) $(LIBPATH) $(LSCRIPT)
@@ -32,6 +32,9 @@ $(EXEC): $(OBJS) $(INCLUDES)
 
 %.o:%.s
 	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
+
+size:
+	@arm-none-eabi-size $(EXEC)
 
 clean:
 	rm -rf $(OBJS) $(EXEC) *.o *.d
