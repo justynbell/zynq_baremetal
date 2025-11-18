@@ -836,7 +836,7 @@ proc get_number_of_cycles_for_delay { delay } {
 
   # GTC is always clocked at 1/2 of the CPU frequency (CPU_3x2x)
   variable APU_FREQ
-  return [ expr ($delay * $APU_FREQ /(2 * 1000))]
+  return [ expr {($delay * $APU_FREQ /(2 * 1000))}]
 }
 
 
