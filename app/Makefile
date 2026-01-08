@@ -1,42 +1,54 @@
-BSP_PATH = ../bsp
+BSP_PATH := ../bsp
+SRC_DIR := src
+BUILD_DIR := build
+
 CC := arm-none-eabi-gcc
 CFLAGS := -Wall -O0 -g3 -fmessage-length=0
 CC_FLAGS := -MMD -MP -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard
 LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -lxil -lgcc -lc -lm -Wl,--end-group
 
-c_SOURCES := $(wildcard *.c)
-S_SOURCES := $(wildcard *.S)
-s_SOURCES := $(wildcard *.s)
-INCLUDES := $(wildcard *.h)
-OBJS := $(patsubst %.c, %.o, $(c_SOURCES))
-OBJS += $(patsubst %.S, %.o, $(S_SOURCES))
-OBJS += $(patsubst %.s, %.o, $(s_SOURCES))
+c_SOURCES := $(wildcard $(SRC_DIR)/*.c)
+S_SOURCES := $(wildcard $(SRC_DIR)/*.S)
+s_SOURCES := $(wildcard $(SRC_DIR)/*.s)
+INCLUDES  := $(wildcard $(SRC_DIR)/*.h)
+
+INCLUDEPATH := -I$(BSP_PATH)/ps7_cortexa9_0/include -I$(SRC_DIR)
+LIBPATH := -L$(BSP_PATH)/ps7_cortexa9_0/lib
+
 LSCRIPT := -Tlscript.ld
 
-DEPFILES := $(patsubst %.o, %.d, $(OBJS))
-EXEC := app.elf
+OBJS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(c_SOURCES))
+OBJS += $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(S_SOURCES))
+OBJS += $(patsubst $(SRC_DIR)/%.s, $(BUILD_DIR)/%.o, $(s_SOURCES))
+DEPFILES := $(OBJS:.o=.d)
 
-INCLUDEPATH := -I$(BSP_PATH)/ps7_cortexa9_0/include -I.
-LIBPATH := -L$(BSP_PATH)/ps7_cortexa9_0/lib -L./
+EXEC := app.elf
 
 all: $(EXEC) size
 
-$(EXEC): $(OBJS) $(INCLUDES)
-	$(CC) -o $@ $(sort $(OBJS)) $(CC_FLAGS) $(CFLAGS) $(LN_FLAGS) $(LIBPATH) $(LSCRIPT)
+$(EXEC): $(OBJS)
+	$(CC) -o $@ $(OBJS) $(CC_FLAGS) $(CFLAGS) $(LN_FLAGS) $(LIBPATH) $(LSCRIPT)
 
-%.o:%.c
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
 
-%.o:%.S
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.S
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
 
-%.o:%.s
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.s
+	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
+
+$(BUILD_DIR)/%.s: $(SRC_DIR)/%.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(BSP_FLAGS) $(CC_FLAGS) -S $< -o $@ $(INCLUDEPATH)
 
 size:
 	@arm-none-eabi-size $(EXEC)
 
 clean:
-	rm -rf $(OBJS) $(EXEC) *.o *.d
+	$(RM) $(OBJS) $(DEPFILES) $(EXEC)
 
 -include $(DEPFILES)
