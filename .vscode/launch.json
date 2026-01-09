@@ -63,7 +63,7 @@
             "searchDir": [
                 "${workspaceFolder}/openocd"
             ],
-            "runToEntryPoint": "main",
+            "runToEntryPoint": "_start",
             "showDevDebugOutput": "raw",
             "overrideLaunchCommands": [
                 "monitor reset halt",

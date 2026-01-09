@@ -1,166 +1,157 @@
-/******************************************************************************
- * @file main.c
- * This is the main function's definition file for the Arty Z7 -Z20 demo.
- *
- * @authors Elod Gyorgy
- *
- * @date 2016-Dec-21
- *
- * @copyright
- * (c) 2016 Copyright Digilent Incorporated
- * All Rights Reserved
- *
- * This program is free software; distributed under the terms of BSD 3-clause
- * license ("Revised BSD License", "New BSD License", or "Modified BSD License")
- *
- * Redistribution and use in source and binary forms, with or without modification,
- * are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright notice, this
- *    list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- * 3. Neither the name(s) of the above-listed copyright holder(s) nor the names
- *    of its contributors may be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
- * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
- * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
- * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
- * @desciption
- * It is a simple demo that controls the LEDs to make sure Zynq boots up. Buttons,
- * switches modify the behavior of the LEDs.
- * HDMI input will be forwarded unchanged to HDMI output.
- * Audio output plays a pre-recorded soundtrack loaded from the boot image.
- *
- * @note
- *
- * UART setup:		In order to successfully communicate you must set your
- * 					terminal to 115200 Baud, 8 data bits, 1 stop bit, no parity.
- *
- * <pre>
- * MODIFICATION HISTORY:
- *
- * Ver   Who          Date        Changes
- * ----- ------------ ----------- --------------------------------------------
- * 1.00  Elod Gyorgy 2016-Dec-21 First release
- * 1.01  Arthur Brown 2018-Dec-4 Clean up for Github Release (pre-recorded soundtrack not included in repo)
- *
- * </pre>
- *
- *****************************************************************************/
-
-/***************************** Include Files *********************************/
 #include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <xstatus.h>
-#include "xparameters.h"
-#include "xil_cache.h"
-#include "xil_exception.h"
+#include <limits.h>
 
-#include "verbose.h"
-#include "platform.h"
-#include "intc.h"
-#include "user_io.h"
-#include "audiopwm.h"
-#include "dma.h"
+#include "xil_printf.h"
+#include "xscuwdt.h"
+#include "xscugic.h"
+#include "xscutimer.h"
+#include "sleep.h"
 
-/************************** Constant Definitions *****************************/
+#include "FreeRTOS.h"
+#include "portmacro.h"
+#include "task.h"
 
-/********************* Global Variable Definitions ***************************/
-static XAxiDma sAxiDma;
+XScuWdt xWatchDogInstance;
+XScuGic xInterruptController;
+XScuTimer xTimer;
 
-
-/****************** Static Global Variable Definitions ***********************/
-
-const ivt_t ivt[] =
+void vAssertCalled(const char *pcFile, unsigned long ulLine)
 {
-	//{XPAR_XQSPIPS_0_INTR, (Xil_InterruptHandler)XQspiPs_InterruptHandler, &sQSpi},
-	{XPAR_FABRIC_AXI_DMA_0_MM2S_INTROUT_INTR, (XInterruptHandler)fnMM2SInterruptHandler, &sAxiDma}
-};
+    (void)pcFile;
+    (void)ulLine;
 
-/************************** Function Prototypes ******************************/
+    for (;;);
+}
 
-/************************** Function Definitions *****************************/
-int main() {
-	XStatus Status, fInitSuccess;
-	static XScuGic sIntc;
-	u8 btn;
+void vInitialiseTimerForRunTimeStats( void )
+{
+    XScuWdt_Config *pxWatchDogInstance;
+    uint32_t ulValue;
+    const uint32_t ulMaxDivisor = 0xff, ulDivisorShift = 0x08;
 
-	init_platform();
+    pxWatchDogInstance = XScuWdt_LookupConfig(XPAR_SCUWDT_0_DEVICE_ID);
+    XScuWdt_CfgInitialize(&xWatchDogInstance, pxWatchDogInstance, pxWatchDogInstance->BaseAddr);
 
-	CLR_VERBOSE_FLAG();
+    ulValue = XScuWdt_GetControlReg(&xWatchDogInstance);
+    ulValue |= ulMaxDivisor << ulDivisorShift;
+    XScuWdt_SetControlReg(&xWatchDogInstance, ulValue);
 
-	//This might not be printed properly, if CmdInit below uses the same UART as stdout
-	VERBOSE("Initializing...");
-	fInitSuccess = XST_SUCCESS;
+    XScuWdt_LoadWdt(&xWatchDogInstance, UINT_MAX);
+    XScuWdt_SetTimerMode(&xWatchDogInstance);
+    XScuWdt_Start(&xWatchDogInstance);
+}
 
-	{
-		// Initialize the interrupt controller
-		Status = fnInitInterruptController(&sIntc);
-		if(Status != XST_SUCCESS) {
-			VERBOSE("err:irpt");
-			fInitSuccess = XST_FAILURE;
-			goto endinit;
-		}
+static uint32_t tickHookCnt = 0;
+void vApplicationTickHook( void )
+{
+    tickHookCnt++;
+}
 
-		//Initialise Audio
-		{
-			// Initialize DMA
-			Status = fnConfigDma(&sAxiDma);
-			if (Status != XST_SUCCESS)
-			{
-				xil_printf("err:dma\r\n");
-				return XST_FAILURE;
-			}
+void vApplicationStackOverflowHook(TaskHandle_t pxTask, char *pcTaskName)
+{
+    (void)pcTaskName;
+    (void)pxTask;
 
-			//set Audio address and number of samples
-			AudioSetNrOfSamples(AUD_NR_SAMPLES);
+    /* Run time stack overflow checking is performed if
+    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2.  This hook
+    function is called if a stack overflow is detected. */
+    taskDISABLE_INTERRUPTS();
+    for(;;);
+}
 
-		}
+void vApplicationIdleHook( void )
+{
+    volatile size_t xFreeHeapSpace, xMinimumEverFreeHeapSpace;
 
-		//Init rest of drivers here
-		USER_IO_RGB_INIT();
+    /* This is just a trivial example of an idle hook.  It is called on each
+    cycle of the idle task.  It must *NOT* attempt to block.  In this case the
+    idle task just queries the amount of FreeRTOS heap that remains.  See the
+    memory management section on the http://www.FreeRTOS.org web site for memory
+    management options.  If there is a lot of heap memory free then the
+    configTOTAL_HEAP_SIZE value in FreeRTOSConfig.h can be reduced to free up
+    RAM. */
+    xFreeHeapSpace = xPortGetFreeHeapSize();
+    xMinimumEverFreeHeapSpace = xPortGetMinimumEverFreeHeapSize();
 
-		// Enable all interrupts in our interrupt vector table
-		// Make sure all driver instances using this IVT are initialized first
-		fnEnableInterrupts(&sIntc, &ivt[0], sizeof(ivt)/sizeof(ivt[0]));
+    /* Remove compiler warning about xFreeHeapSpace being set but never used. */
+    (void)xFreeHeapSpace;
+    (void)xMinimumEverFreeHeapSpace;
+}
 
-		VERBOSE("init:done");
+void vApplicationMallocFailedHook( void )
+{
+    /* Called if a call to pvPortMalloc() fails because there is insufficient
+    free memory available in the FreeRTOS heap.  pvPortMalloc() is called
+    internally by FreeRTOS API functions that create tasks, queues, software
+    timers, and semaphores.  The size of the FreeRTOS heap is set by the
+    configTOTAL_HEAP_SIZE configuration constant in FreeRTOSConfig.h. */
+    taskDISABLE_INTERRUPTS();
+    for(;;);
+}
 
-endinit:
-		fInitSuccess = fInitSuccess; //Have to add an instruction for the label
-	}
+void vConfigureTickInterrupt( void )
+{
+    BaseType_t xStatus;
+    extern void FreeRTOS_Tick_Handler( void );
+    XScuTimer_Config *pxTimerConfig;
+    XScuGic_Config *pxGICConfig;
+    const uint8_t ucRisingEdge = 3;
 
-	xil_printf("Starting Arty Z7-20 Rev. B Out-of-Box Demo\r\n");
+	/* This function is called with the IRQ interrupt disabled, and the IRQ
+	interrupt should be left disabled.  It is enabled automatically when the
+	scheduler is started. */
 
-	USER_IO_BTN_EN(1);
-	USER_IO_SW_EN(1);
+	/* Ensure XScuGic_CfgInitialize() has been called.  In this demo it has
+	already been called from prvSetupHardware() in main(). */
+	pxGICConfig = XScuGic_LookupConfig( XPAR_SCUGIC_SINGLE_DEVICE_ID );
+	xStatus = XScuGic_CfgInitialize( &xInterruptController, pxGICConfig, pxGICConfig->CpuBaseAddress );
+	configASSERT( xStatus == XST_SUCCESS );
+	( void ) xStatus; /* Remove compiler warning if configASSERT() is not defined. */
 
-	while(1) {
-		USER_IO_RGB_AUTOTEST();
-		btn = u8BTN_Val();
-		if (btn)
-		{
-			// Play C4 (261 Hz Sine Wave) over AUDIO OUT at sampling rate of 48KHz, arbitrary amplitude < 0x7FFF
-			// ArtVVB: higher amplitudes have some distortion present, unsure why
-			SinGenerator((u32*)AUDIO_MEM_ADDR, AUD_NR_SAMPLES, 261, 48000, 256);
-			xil_printf("Button press detected. Starting audio playback.\r\n");
-			AudioDmaPlayBack(&sAxiDma, AUD_NR_SAMPLES, AUDIO_MEM_ADDR);
-			xil_printf("Audio playback complete.");
-		}
-	}
+	/* The priority must be the lowest possible. */
+	XScuGic_SetPriorityTriggerType( &xInterruptController, XPAR_SCUTIMER_INTR, portLOWEST_USABLE_INTERRUPT_PRIORITY << portPRIORITY_SHIFT, ucRisingEdge );
 
-	cleanup_platform();
-	return 0;
+	/* Install the FreeRTOS tick handler. */
+	xStatus = XScuGic_Connect( &xInterruptController, XPAR_SCUTIMER_INTR, (Xil_ExceptionHandler) FreeRTOS_Tick_Handler, ( void * ) &xTimer );
+	configASSERT( xStatus == XST_SUCCESS );
+	( void ) xStatus; /* Remove compiler warning if configASSERT() is not defined. */
+
+	/* Initialise the timer. */
+	pxTimerConfig = XScuTimer_LookupConfig( XPAR_SCUTIMER_DEVICE_ID );
+	xStatus = XScuTimer_CfgInitialize( &xTimer, pxTimerConfig, pxTimerConfig->BaseAddr );
+	configASSERT( xStatus == XST_SUCCESS );
+	( void ) xStatus; /* Remove compiler warning if configASSERT() is not defined. */
+
+	/* Enable Auto reload mode. */
+	XScuTimer_EnableAutoReload( &xTimer );
+
+	/* Ensure there is no prescale. */
+	XScuTimer_SetPrescaler( &xTimer, 0 );
+
+	/* Load the timer counter register. */
+	XScuTimer_LoadTimer( &xTimer, (XPAR_CPU_CORTEXA9_0_CPU_CLK_FREQ_HZ / 2UL) / configTICK_RATE_HZ );
+
+	/* Start the timer counter and then wait for it to timeout a number of
+	times. */
+	XScuTimer_Start( &xTimer );
+
+	/* Enable the interrupt for the xTimer in the interrupt controller. */
+	XScuGic_Enable( &xInterruptController, XPAR_SCUTIMER_INTR );
+
+	/* Enable the interrupt in the xTimer itself. */
+	vClearTickInterrupt();
+	XScuTimer_EnableInterrupt( &xTimer );
+}
+
+void vClearTickInterrupt( void )
+{
+	XScuTimer_ClearInterruptStatus( &xTimer );
+}
+
+int main()
+{
+    while (1) {
+        printf("Hello, jworld\n");
+        sleep(1);
+    }
 }
