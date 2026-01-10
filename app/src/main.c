@@ -43,17 +43,17 @@ static void setup(void)
 	vPortInstallFreeRTOSVectorTable();
 }
 
-void vTestTask1(void *pvParameters)
+static void vTestTask1(void *pvParameters)
 {
     (void)pvParameters;
 
     while (1) {
         printf("FREERTOS\n");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
 
-void vTestTask2(void *pvParameters)
+static void vTestTask2(void *pvParameters)
 {
     (void)pvParameters;
 
