@@ -8,43 +8,16 @@
             "cwd": "${workspaceFolder}/openocd",
             "executable": "${workspaceFolder}/app/app.elf",
             "servertype": "openocd",
-            //"gdbPath": "/usr/bin/gdb-multiarch",
             "configFiles": [
                 "${workspaceFolder}/openocd/arty-z7.cfg"
             ],
             "searchDir": [
                 "${workspaceFolder}/openocd"
             ],
-            "runToEntryPoint": "main",
-            "showDevDebugOutput": "raw",
-            "overrideLaunchCommands": [
-                "monitor pld load zynq_pl.pld ../system.bit",
-                "monitor sleep 1000",
-                "monitor reset init",
-                "monitor sleep 1000",
-                "load",
-            ],
-            "preLaunchTask": "Build APP"
-        },
-        {
-            "name": "Debug APP (no bitstream)",
-            "type": "cortex-debug",
-            "request": "launch",
-            "cwd": "${workspaceFolder}/openocd",
-            "executable": "${workspaceFolder}/app/app.elf",
-            "servertype": "openocd",
-            //"gdbPath": "/usr/bin/gdb-multiarch",
-            "configFiles": [
-                "${workspaceFolder}/openocd/arty-z7.cfg"
-            ],
-            "searchDir": [
-                "${workspaceFolder}/openocd"
-            ],
-            "runToEntryPoint": "main",
+            "runToEntryPoint": "_start",
             "showDevDebugOutput": "raw",
             "overrideLaunchCommands": [
                 "monitor reset init",
-                "monitor sleep 1000",
                 "load",
             ],
             "preLaunchTask": "Build APP"
@@ -56,7 +29,6 @@
             "cwd": "${workspaceFolder}/openocd",
             "executable": "${workspaceFolder}/fsbl/fsbl.elf",
             "servertype": "openocd",
-            //"gdbPath": "/usr/bin/gdb-multiarch",
             "configFiles": [
                 "${workspaceFolder}/openocd/arty-z7.cfg"
             ],

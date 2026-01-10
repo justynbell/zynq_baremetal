@@ -42,36 +42,17 @@
             "problemMatcher": []
         },
         {
-            "label": "Start OpenOCD",
+            "label": "Program FPGA",
             "type": "shell",
             "command": "openocd",
             "args": [
-                "-f",
-                "${workspaceFolder}/openocd/arty-z7.cfg"
+                "-f", "arty-z7.cfg",
+                "-c", "init; pld load 0 ../system.bit; exit"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/openocd"
             },
-            "isBackground": true,
-            "problemMatcher": {
-                "pattern": {
-                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-                    "file": 1,
-                    "line": 2,
-                    "column": 3,
-                    "severity": 4,
-                    "message": 5
-                },
-                "background": {
-                    "activeOnStart": true,
-                    "beginsPattern": "Open On-Chip Debugger",
-                    "endsPattern": "Info : Listening on port 3333 for gdb connections"
-                }
-            },
-            "presentation": {
-                "reveal": "always",
-                "panel": "dedicated"
-            }
+            "problemMatcher": []
         }
     ]
 }

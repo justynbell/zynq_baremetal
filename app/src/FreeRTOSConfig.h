@@ -92,7 +92,6 @@
 #define configUSE_COUNTING_SEMAPHORES			1
 #define configUSE_QUEUE_SETS					1
 #define configSUPPORT_STATIC_ALLOCATION			1
-#define configKERNEL_PROVIDED_STATIC_MEMORY     1
 
 /* Include the query-heap CLI command to query the free heap space. */
 #define configINCLUDE_QUERY_HEAP_COMMAND		1
