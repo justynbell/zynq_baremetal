@@ -14,10 +14,10 @@
             "searchDir": [
                 "${workspaceFolder}/openocd"
             ],
-            "runToEntryPoint": "_start",
+            "runToEntryPoint": "main",
             "showDevDebugOutput": "raw",
             "overrideLaunchCommands": [
-                "monitor reset init",
+                "monitor arty_z7_reset",
                 "load",
             ],
             "preLaunchTask": "Build APP"

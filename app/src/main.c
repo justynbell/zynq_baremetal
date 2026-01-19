@@ -48,7 +48,7 @@ static void vTestTask1(void *pvParameters)
     (void)pvParameters;
 
     while (1) {
-        printf("FREERTOS\n");
+        printf("thread1 v13\n");
         vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
@@ -58,7 +58,7 @@ static void vTestTask2(void *pvParameters)
     (void)pvParameters;
 
     while (1) {
-        printf("freertos\n");
+        printf("thread2 v13\n");
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
