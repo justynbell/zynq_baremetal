@@ -1,0 +1,10 @@
+{
+    "files.exclude": {
+        "**/freertos/examples/**": true
+    },
+    "C_Cpp.default.browse.path": [
+        "${workspaceFolder}/app/src",
+        "${workspaceFolder}/app/freertos/include",
+        "${workspaceFolder}/app/freertos/portable/GCC/ARM_CA9"
+    ],
+}
