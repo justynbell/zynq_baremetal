@@ -16,7 +16,7 @@ When the BootROM code is done, we jump to our FSBL. (TODO explain the FSBL in mo
 # Project Structure
 ## BSP
 ### What is it?
-The BSP directory contains all the Xilinx libraries needed for both the first stage bootloader (FSBL) as well as the application. It contains libraries for configuration and control of peripherals (PS and PL), clocking, register address definitions, etc. This is auto-generated in Vitis when creating a "Platform Project" and importing a HW design file (.xsa).
+The BSP directory contains all the Xilinx libraries needed for the first stage bootloader (FSBL), the flasher application as well as the main application. It contains libraries for configuration and control of peripherals (PS and PL), clocking, register address definitions, etc. This is auto-generated in Vitis when creating a "Platform Project" and importing a HW design file (.xsa).
 
 ### Where does it come from?
 Once you import an XSA from Vivado into a Vitis Platform Project, Vitis auto-generates the libraries, xparameters.h (which contains register definitions, clocking information, and other defines generated from your .xsa hardware design) and other support files. The whole thing was lifted from `<the_vitis_workspace>/ps7_cortexa9_0/standalone_domain/bsp`.
@@ -40,6 +40,18 @@ The app is the actual application that the FSBL jumps to. I'm starting with a ba
 FreeRTOS is included as a git submodule in the `app/` directory. The app's Makefile handles compiling the relevant FreeRTOS source files. The files `app/src/FreeRTOS_asm_vectors.S`, `app/src/FreeRTOSConfig.h`, and a helper translation unit `app/src/rtos_setup.c` handle the relevant configuration and GIC setup to get FreeRTOS running in the application.
 
 Additionally, the linkerscript (`app/lscript.ld) needs to be modified to include the FreeRTOS vector table.
+
+### LWIP
+LWIP is also included as a git submodule in the `app/` directory.  More to come when I wire it up.
+
+## Flasher
+The flasher application was born from the motivation to load code onto the Arty Z7's QSPI flash, again, without the bloated Xilinx tools. The way that Vitis does it (from what I can tell) is it loads some stripped-down version of u-boot onto the Zynq's OCM. Then commands are sent via JTAG to probe, erase, and write to the QSPI flash.
+
+I couldn't get that u-boot version to work, I don't think I can write JTAG commands through the same channels as Vitis, and Xilinx doesn't provide the source code for that u-boot version. So what do we do? We write our own.
+
+Flasher sits and waits for a couple register pokes: the size of the image to copy, and a "start" register poke. Upon receiving the "start" poke, it just copies data from a hard-coded address in memory to the QSPI flash chip starting at offset 0x00. This means something needs to be sitting at that source address to be copied to the QSPI flash, and a valid size needs to be written to the "size" address the flasher application checks.
+
+The flasher writes diagnostic data via the USB serial interface.
 
 ## OpenOCD
 The `openocd` directory contains the configuration files to debug the Zynq with OpenOCD. Specifically `arty-z7.cfg` is used with OpenOCD to configure and control the Zynq for debugging. The `ps7_init.tcl` configures the part without first running the FSBL. It seems that there are .tcl commands that are Xilinx-specific (not standard TCL commands) within this initialization file, so `xilinx-tcl.cfg` is provided and included in `arty-z7.cfg` to "translate" the Xilinx commands into standard TCL commands. This way `ps7_init.tcl` can be lifted from Vitis when the hardware description file (.xsa) is changed.

@@ -10,16 +10,15 @@
 /*                                                                 */
 /*******************************************************************/
 
-_STACK_SIZE = DEFINED(_STACK_SIZE) ? _STACK_SIZE : 0x2000;
-_HEAP_SIZE = DEFINED(_HEAP_SIZE) ? _HEAP_SIZE : 0x2000;
+_STACK_SIZE = 0x2000;
+/* No heap in these parts, pal */
+_HEAP_SIZE  = 0x0000;
 
-_ABORT_STACK_SIZE = DEFINED(_ABORT_STACK_SIZE) ? _ABORT_STACK_SIZE : 1024;
-_SUPERVISOR_STACK_SIZE = DEFINED(_SUPERVISOR_STACK_SIZE) ? _SUPERVISOR_STACK_SIZE : 2048;
-_IRQ_STACK_SIZE = DEFINED(_IRQ_STACK_SIZE) ? _IRQ_STACK_SIZE : 1024;
-_FIQ_STACK_SIZE = DEFINED(_FIQ_STACK_SIZE) ? _FIQ_STACK_SIZE : 1024;
-_UNDEF_STACK_SIZE = DEFINED(_UNDEF_STACK_SIZE) ? _UNDEF_STACK_SIZE : 1024;
-
-/* Define Memories in the system */
+_ABORT_STACK_SIZE = 1024;
+_SUPERVISOR_STACK_SIZE = 2048;
+_IRQ_STACK_SIZE = 1024;
+_FIQ_STACK_SIZE = 1024;
+_UNDEF_STACK_SIZE = 1024;
 
 MEMORY
 {
@@ -245,16 +244,6 @@ _SDA_BASE_ = __sdata_start + ((__sbss_end - __sdata_start) / 2 );
 _SDA2_BASE_ = __sdata2_start + ((__sbss2_end - __sdata2_start) / 2 );
 
 /* Generate Stack and Heap definitions */
-
-.heap (NOLOAD) : {
-   . = ALIGN(16);
-   _heap = .;
-   HeapBase = .;
-   _heap_start = .;
-   . += _HEAP_SIZE;
-   _heap_end = .;
-   HeapLimit = .;
-} > ps7_ddr_0
 
 .stack (NOLOAD) : {
    . = ALIGN(16);
