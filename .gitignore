@@ -3,6 +3,11 @@
 BOOT.BIN
 bsp/ps7_cortexa9_0/lib/*
 !bsp/ps7_cortexa9_0/lib/.keep
+
 fsbl/fsbl.elf
+
+flasher/flasher.elf
+flasher/build
+
 app/app.elf
 app/build

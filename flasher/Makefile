@@ -1,0 +1,52 @@
+BSP_PATH := ../bsp
+BUILD_DIR := build
+
+CC := arm-none-eabi-gcc
+CFLAGS := -Wall -O0 -g3 -fmessage-length=0
+CC_FLAGS := -MMD -MP -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard
+LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -lxil -lgcc -lc -lm -Wl,--end-group
+
+# Application Source Files #
+c_SOURCES := $(wildcard *.c)
+S_SOURCES := $(wildcard *.S)
+
+# Object Files #
+OBJS := $(patsubst %.c, $(BUILD_DIR)/%.o, $(c_SOURCES))
+OBJS += $(patsubst %.S, $(BUILD_DIR)/%.o, $(S_SOURCES))
+
+# Includes
+INCLUDEPATH := \
+	-I$(BSP_PATH)/ps7_cortexa9_0/include -I. \
+
+# Libraries #
+LIBPATH := -L$(BSP_PATH)/ps7_cortexa9_0/lib
+
+# Linker Script #
+LSCRIPT := -Tlscript.ld
+
+DEPFILES := $(OBJS:.o=.d)
+
+EXEC := flasher.elf
+
+.PHONY: all clean size
+
+all: $(EXEC) size
+
+$(EXEC): $(OBJS)
+	$(CC) -o $@ $(OBJS) $(CC_FLAGS) $(CFLAGS) $(LN_FLAGS) $(LIBPATH) $(LSCRIPT)
+
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
+
+$(BUILD_DIR)/%.o: %.S
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
+
+size:
+	@arm-none-eabi-size $(EXEC)
+
+clean:
+	$(RM) $(OBJS) $(DEPFILES) $(EXEC)
+
+-include $(DEPFILES)

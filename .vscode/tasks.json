@@ -32,6 +32,16 @@
             "problemMatcher": []
         },
         {
+            "label": "Build Flasher",
+            "type": "shell",
+            "command": "make",
+            "options": {
+                "cwd": "${workspaceFolder}/flasher"
+            },
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
             "label": "Build All",
             "type": "shell",
             "command": "make",

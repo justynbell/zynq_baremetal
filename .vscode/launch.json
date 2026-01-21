@@ -42,6 +42,27 @@
                 "load"
             ],
             "preLaunchTask": "Build FSBL"
-        }
+        },
+        {
+            "name": "Debug Flasher",
+            "type": "cortex-debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/openocd",
+            "executable": "${workspaceFolder}/flasher/flasher.elf",
+            "servertype": "openocd",
+            "configFiles": [
+                "${workspaceFolder}/openocd/arty-z7.cfg"
+            ],
+            "searchDir": [
+                "${workspaceFolder}/openocd"
+            ],
+            "runToEntryPoint": "_start",
+            "showDevDebugOutput": "raw",
+            "overrideLaunchCommands": [
+                "monitor arty_z7_reset",
+                "load",
+            ],
+            "preLaunchTask": "Build Flasher"
+        },
     ]
 }
