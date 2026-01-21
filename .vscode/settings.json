@@ -8,4 +8,5 @@
         "${workspaceFolder}/app/freertos/portable/GCC/ARM_CA9"
     ],
     "cortex-debug.variableUseNaturalFormat": false,
+    "terminal.integrated.defaultProfile.windows": "Git Bash"
 }

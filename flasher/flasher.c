@@ -18,11 +18,6 @@
 #define QSPI_BUSWIDTH_FOUR	2U
 #define FLASH_SIZE_16MB					0x1000000
 
-#define COMMAND_OFFSET		0 /* FLASH instruction */
-#define ADDRESS_1_OFFSET	1 /* MSB byte of address to read or write */
-#define ADDRESS_2_OFFSET	2 /* Middle byte of address to read or write */
-#define ADDRESS_3_OFFSET	3 /* LSB byte of address to read or write */
-
 #define LQSPI_CR_FAST_READ			0x0000000B
 #define LQSPI_CR_FAST_DUAL_READ		0x0000003B
 #define LQSPI_CR_FAST_QUAD_READ		0x0000006B /* Fast Quad Read output */
@@ -38,7 +33,6 @@ static u32 QspiFlashMake;
  * the buffer required to hold the data and overhead to transfer the data to
  * and from the FLASH.
  */
-#define DATA_SIZE		4096
 #define DATA_OFFSET			4 /* Start of Data for Read/Write */
 #define DUMMY_OFFSET		4 /* Dummy byte offset for fast, dual and quad
 				     reads */
@@ -48,8 +42,8 @@ static u32 QspiFlashMake;
  * The following variables are used to read and write to the eeprom and they
  * are global to avoid having large buffers on the stack
  */
-u8 ReadBuffer[DATA_SIZE + DATA_OFFSET + DUMMY_SIZE];
-u8 WriteBuffer[DATA_OFFSET + DUMMY_SIZE];
+u8 readBuffer[W25Q_PAGE_SIZE + DATA_OFFSET + DUMMY_SIZE];
+u8 writeBuffer[W25Q_PAGE_SIZE + DATA_OFFSET + DUMMY_SIZE];
 
 #define READ_ID_CMD			0x9F
 #define RD_ID_SIZE			4 /* Read ID command + 3 bytes ID response */
@@ -85,14 +79,17 @@ u8 WriteBuffer[DATA_OFFSET + DUMMY_SIZE];
 #define FLASH_SIZE_1G			0x8000000
 #define FLASH_SIZE_2G			0x10000000
 
-u32 flashRead(uint32_t address, uint8_t *rdPtr, uint32_t size)
-{
-    WriteBuffer[COMMAND_OFFSET]   = 0x03;
-    WriteBuffer[ADDRESS_1_OFFSET] = (uint8_t)(address >> 16);
-    WriteBuffer[ADDRESS_2_OFFSET] = (uint8_t)(address >> 8);
-    WriteBuffer[ADDRESS_3_OFFSET] = (uint8_t)address;
+// Helper to wait for the chip to finish an internal operation
+static void flashWaitForBusy(void) {
+    u8 statusReg = 0;
+	writeBuffer[0] = 0x05;
+	writeBuffer[1] = 0x00;
 
-    return XQspiPs_PolledTransfer(&QspiInstance, WriteBuffer, rdPtr, size);
+    while (1) {
+        XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, readBuffer, 2);
+        statusReg = readBuffer[1];
+        if ((statusReg & 0x01) == 0) break; // Check WIP bit (Bit 0)
+    }
 }
 
 static u32 FlashReadID(void)
@@ -100,12 +97,13 @@ static u32 FlashReadID(void)
 	u32 Status;
 
 	// Read ID in Auto mode.
-	WriteBuffer[COMMAND_OFFSET]   = READ_ID_CMD;
-	WriteBuffer[ADDRESS_1_OFFSET] = 0x00;		/* 3 dummy bytes */
-	WriteBuffer[ADDRESS_2_OFFSET] = 0x00;
-	WriteBuffer[ADDRESS_3_OFFSET] = 0x00;
+	writeBuffer[0]   = READ_ID_CMD;
+	// 3 dummy bytes
+	writeBuffer[1] = 0x00;
+	writeBuffer[2] = 0x00;
+	writeBuffer[3] = 0x00;
 
-	Status = XQspiPs_PolledTransfer(&QspiInstance, WriteBuffer, ReadBuffer,
+	Status = XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, readBuffer,
 				RD_ID_SIZE);
 	if (Status != XST_SUCCESS) {
 		return XST_FAILURE;
@@ -113,68 +111,64 @@ static u32 FlashReadID(void)
 
 	xil_printf("Single Flash Information\r\n");
 
-	xil_printf("FlashID=0x%x 0x%x 0x%x\r\n", ReadBuffer[1],
-			ReadBuffer[2],
-			ReadBuffer[3]);
+	xil_printf("FlashID=0x%x 0x%x 0x%x\r\n", readBuffer[1],
+			readBuffer[2],
+			readBuffer[3]);
 
-	/*
-	 * Deduce flash make
-	 */
-	if (ReadBuffer[1] == MICRON_ID) {
+	// Deduce flash make
+	if (readBuffer[1] == MICRON_ID) {
 		QspiFlashMake = MICRON_ID;
 		xil_printf("MICRON ");
-	} else if(ReadBuffer[1] == SPANSION_ID) {
+	} else if(readBuffer[1] == SPANSION_ID) {
 		QspiFlashMake = SPANSION_ID;
 		xil_printf("SPANSION ");
-	} else if(ReadBuffer[1] == WINBOND_ID) {
+	} else if(readBuffer[1] == WINBOND_ID) {
 		QspiFlashMake = WINBOND_ID;
 		xil_printf("WINBOND ");
-	} else if(ReadBuffer[1] == MACRONIX_ID) {
+	} else if(readBuffer[1] == MACRONIX_ID) {
 		QspiFlashMake = MACRONIX_ID;
 		xil_printf("MACRONIX ");
-	} else if(ReadBuffer[1] == ISSI_ID) {
+	} else if(readBuffer[1] == ISSI_ID) {
 		QspiFlashMake = ISSI_ID;
 		xil_printf("ISSI ");
 	}
 
-	/*
-	 * Deduce flash Size
-	 */
-	if (ReadBuffer[3] == FLASH_SIZE_ID_8M) {
+	// Deduce flash Size
+	if (readBuffer[3] == FLASH_SIZE_ID_8M) {
 		QspiFlashSize = FLASH_SIZE_8M;
 		xil_printf("8M Bits\r\n");
-	} else if (ReadBuffer[3] == FLASH_SIZE_ID_16M) {
+	} else if (readBuffer[3] == FLASH_SIZE_ID_16M) {
 		QspiFlashSize = FLASH_SIZE_16M;
 		xil_printf("16M Bits\r\n");
-	} else if (ReadBuffer[3] == FLASH_SIZE_ID_32M) {
+	} else if (readBuffer[3] == FLASH_SIZE_ID_32M) {
 		QspiFlashSize = FLASH_SIZE_32M;
 		xil_printf("32M Bits\r\n");
-	} else if (ReadBuffer[3] == FLASH_SIZE_ID_64M) {
+	} else if (readBuffer[3] == FLASH_SIZE_ID_64M) {
 		QspiFlashSize = FLASH_SIZE_64M;
 		xil_printf("64M Bits\r\n");
-	} else if (ReadBuffer[3] == FLASH_SIZE_ID_128M) {
+	} else if (readBuffer[3] == FLASH_SIZE_ID_128M) {
 		QspiFlashSize = FLASH_SIZE_128M;
 		xil_printf("128M Bits\r\n");
-	} else if (ReadBuffer[3] == FLASH_SIZE_ID_256M) {
+	} else if (readBuffer[3] == FLASH_SIZE_ID_256M) {
 		QspiFlashSize = FLASH_SIZE_256M;
 		xil_printf("256M Bits\r\n");
-	} else if ((ReadBuffer[3] == FLASH_SIZE_ID_512M)
-			|| (ReadBuffer[3] == MACRONIX_FLASH_1_8_V_MX66_ID_512)
-			|| (ReadBuffer[3] == MACRONIX_FLASH_SIZE_ID_512M)) {
+	} else if ((readBuffer[3] == FLASH_SIZE_ID_512M)
+			|| (readBuffer[3] == MACRONIX_FLASH_1_8_V_MX66_ID_512)
+			|| (readBuffer[3] == MACRONIX_FLASH_SIZE_ID_512M)) {
 		QspiFlashSize = FLASH_SIZE_512M;
 		xil_printf("512M Bits\r\n");
-	} else if ((ReadBuffer[3] == FLASH_SIZE_ID_1G)
-			|| (ReadBuffer[3] == MACRONIX_FLASH_SIZE_ID_1G)) {
+	} else if ((readBuffer[3] == FLASH_SIZE_ID_1G)
+			|| (readBuffer[3] == MACRONIX_FLASH_SIZE_ID_1G)) {
 		QspiFlashSize = FLASH_SIZE_1G;
 		xil_printf("1G Bits\r\n");
-	} else if ((ReadBuffer[3] == FLASH_SIZE_ID_2G)
-			|| (ReadBuffer[3] == MACRONIX_FLASH_SIZE_ID_2G)) {
+	} else if ((readBuffer[3] == FLASH_SIZE_ID_2G)
+			|| (readBuffer[3] == MACRONIX_FLASH_SIZE_ID_2G)) {
 		QspiFlashSize = FLASH_SIZE_2G;
 		xil_printf("2G Bits\r\n");
 	}
+
 	return XST_SUCCESS;
 }
-
 
 u32 flasherInit(void)
 {
@@ -212,73 +206,137 @@ u32 flasherInit(void)
 	return XST_SUCCESS;
 }
 
-// Helper to wait for the chip to finish an internal operation
-static void flashWaitForBusy(void) {
-    u8 statusReg = 0;
-    u8 readBuffer[2]; 
-    u8 writeBuffer[2] = {0x05, 0x00}; // Read Status Register-1 command
+s32 flashRead(uint32_t address, uint8_t *rdPtr, uint32_t size)
+{
+    writeBuffer[0] = 0x03;
+    writeBuffer[1] = (uint8_t)(address >> 16);
+    writeBuffer[2] = (uint8_t)(address >> 8);
+    writeBuffer[3] = (uint8_t)address;
 
-    while (1) {
-        XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, readBuffer, 2);
-        statusReg = readBuffer[1];
-        if ((statusReg & 0x01) == 0) break; // Check WIP bit (Bit 0)
-    }
+	// Need to read the total size + 4 (for the write command and 3 addr bytes)
+    return XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, rdPtr, size + 4);
 }
 
 // Function to program a large buffer from DDR to Flash
-void flasherProgram(u32 flashAddr, u8 *sourceAddr, u32 byteCount) {
+s32 flasherProgram(u32 flashAddr, u8 *sourceAddr, u32 byteCount) {
+	s32 status = XST_SUCCESS;
     u32 left = byteCount;
     u32 currAddr = flashAddr;
+	u32 percent;
+	u32 pagesProcessed;
+	u32 totalSize;
     u8 *currSource = sourceAddr;
-    u8 writeBuffer[W25Q_PAGE_SIZE + 4];
 
     xil_printf("Erasing needed sectors...\n\r");
 
+	// Erase
     for (u32 i = 0; i < byteCount; i += W25Q_SECTOR_SIZE) {
-        u8 eraseCmd[4];
-        eraseCmd[0] = 0xD8; // Block Erase (64KB)
-        eraseCmd[1] = (u8)((currAddr + i) >> 16);
-        eraseCmd[2] = (u8)((currAddr + i) >> 8);
-        eraseCmd[3] = (u8)(currAddr + i);
-
-        u8 writeEnable = 0x06;
-
         // A Write Enable instruction must be executed before the device
         // will accept the Block Erase Instruction
-        XQspiPs_PolledTransfer(&QspiInstance, &writeEnable, NULL, 1);
-        // Call the 64KB block erase function
-        XQspiPs_PolledTransfer(&QspiInstance, eraseCmd, NULL, 4);
+		writeBuffer[0] = 0x06;
+        status = XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, NULL, 1);
+		if (status != XST_SUCCESS) {
+			return XST_FAILURE;
+		}
 
-		xil_printf("%d\\% Erase Complete\r", (i * W25Q_SECTOR_SIZE) / byteCount);
+        // Call the 64KB block erase function
+		writeBuffer[0] = 0xD8;
+        writeBuffer[1] = (u8)((currAddr + i) >> 16);
+        writeBuffer[2] = (u8)((currAddr + i) >> 8);
+        writeBuffer[3] = (u8)(currAddr + i);
+        status = XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, NULL, 4);
+		if (status != XST_SUCCESS) {
+			return XST_FAILURE;
+		}
+
         flashWaitForBusy();
+
+		// Display progress
+		percent = (u32)(((u64)i * 100) / byteCount);
+		xil_printf("\rErase Progress: %3d%% [%08X]", percent, currAddr + i);
     }
 
-    xil_printf("\r\nProgramming pages...\n\r");
+	xil_printf("\n\r");
 
+	// Write
+	totalSize = left;
+	pagesProcessed = 0;
     while (left > 0) {
         u32 sendSize = (left > W25Q_PAGE_SIZE) ? W25Q_PAGE_SIZE : left;
 
-        // 1. Write Enable
-        u8 WriteEnable = 0x06;
-        XQspiPs_PolledTransfer(&QspiInstance, &WriteEnable, NULL, 1);
+        // A Write Enable instruction must be executed before the device
+        // will accept the Page Program command
+        writeBuffer[0] = 0x06;
+        status = XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, NULL, 1);
+		if (status != XST_SUCCESS) {
+			return XST_FAILURE;
+		}
 
-        // 2. Prepare Page Program Command
+        // Prepare Page Program Command
         writeBuffer[0] = 0x02;
         writeBuffer[1] = (u8)(currAddr >> 16);
         writeBuffer[2] = (u8)(currAddr >> 8);
         writeBuffer[3] = (u8)(currAddr);
         memcpy(&writeBuffer[4], currSource, sendSize);
 
-        // 3. Transfer
-        XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, NULL, sendSize + 4);
+        // Transfer data
+        status = XQspiPs_PolledTransfer(&QspiInstance, writeBuffer, NULL, sendSize + 4);
+		if (status != XST_SUCCESS) {
+			return XST_FAILURE;
+		}
+
         flashWaitForBusy();
 
         left -= sendSize;
         currAddr += sendSize;
         currSource += sendSize;
+		pagesProcessed++;
 
-		xil_printf("Writing QSPI flash\n\r");
+		// Display progress
+		if ((pagesProcessed % 64) == 0 || left == 0) {
+			percent = (u32)(((u64)(totalSize - left) * 100) / totalSize);
+			xil_printf("\rProgramming Progress: %3d%% [%08X]", percent, currAddr);
+		}
     }
 
-	xil_printf("Done\n\r");
+	xil_printf("\n\r");
+
+	left = byteCount;
+	currAddr = flashAddr;
+	currSource = sourceAddr;
+	pagesProcessed = 0;
+	while (left > 0) {
+		// Verify pages if possible
+        u32 readSize = (left > W25Q_PAGE_SIZE) ? W25Q_PAGE_SIZE : left;
+
+		status = flashRead(currAddr, readBuffer, readSize);
+		if (status != XST_SUCCESS) {
+			return XST_FAILURE;
+		}
+
+		if (memcmp(&readBuffer[4], currSource, readSize) != 0) {
+			// Find where it failed within this chunk
+			for (u32 i = 0; i < readSize; i++) {
+				if (readBuffer[i + 4] != currSource[i]) {
+					xil_printf("\r\nVerification Error at 0x%08X\n\r", currAddr + i);
+					status = XST_FAILURE;
+				}
+			}
+		}
+
+		left -= readSize;
+		currAddr += readSize;
+		currSource += readSize;
+		pagesProcessed++;
+
+		// Display progress
+		if ((pagesProcessed % 64) == 0 || left == 0) {
+			percent = (u32)(((u64)(totalSize - left) * 100) / totalSize);
+			xil_printf("\rVerification Progress: %3d%% [%08X]", percent, currAddr);
+		}
+	}
+
+	xil_printf("\n\r");
+
+	return status;
 }

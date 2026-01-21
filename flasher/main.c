@@ -7,46 +7,47 @@
 
 #define START_FLAG_ADDR  0x00100000 // Where we poke to start
 #define BINARY_SIZE_ADDR 0x00100004 // The size of the binary
-
-#define FLASH_BASE_ADDR 0x00200000 // Where OpenOCD puts the file
+#define FLASH_BASE_ADDR  0x00200000 // Where OpenOCD puts the file
 
 int main() {
     uint32_t imageSize = 0;
+    int32_t status;
 
     Xil_DCacheDisable();
     Xil_ICacheDisable();
     Xil_DisableMMU();
 
-    // 1. Initialize QSPI driver
+    // Initialize QSPI driver
     flasherInit();
 
-    // 2. Clear START_FLAG_ADDR
-    *(volatile uint32_t*)START_FLAG_ADDR = 0;
+    // Clear start and done flags
+    *(volatile uint32_t*)START_FLAG_ADDR = 0x00;
 
     xil_printf("Flasher Ready. Waiting for JTAG upload...\n\r");
-
-    // Verify by reading
-    uint8_t readBuffer[64 + 4] = { 0 };
-    flashRead(0x00, readBuffer, sizeof(readBuffer));
 
     // Wait for something (OpenOCD) to poke the Start Register
     while(*(volatile uint32_t*)START_FLAG_ADDR == 0);
 
     // Get the size of what was written
     imageSize = *(volatile uint32_t *)BINARY_SIZE_ADDR;
-    // Safety check (16MB max)
+    // 16MB max image size
     if (imageSize == 0 || imageSize > 0x1000000) {
         xil_printf("ERROR: Invalid binary size. Aborting.\n\r");
-        return -1;
+        return 0;
     }
 
     xil_printf("Image size: %d\n\r", imageSize);
-
     xil_printf("Starting Flash Write...\n\r");
 
-    flasherProgram(0x00, *(volatile uint32_t *)FLASH_BASE_ADDR, imageSize);
+    status = flasherProgram(0x00, (uint8_t *)FLASH_BASE_ADDR, imageSize);
+    if (status != XST_SUCCESS) {
+        xil_printf("FAILED LOADING QSPI\n\r");
+        return 0;
+    }
 
-    // 3. Loop: Erase Sector -> Page Program -> Verify
-    // 4. Print "Done"
+    xil_printf("\n\r******************************************\n\r");
+    xil_printf("   FLASH UPDATE SUCCESSFUL!               \n\r");
+    xil_printf("   You may now power cycle the board.     \n\r");
+    xil_printf("******************************************\n\r");
     return 0;
 }
