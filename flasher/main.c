@@ -5,9 +5,36 @@
 
 #include "flasher.h"
 
-#define START_FLAG_ADDR  0x00100000 // Where we poke to start
-#define BINARY_SIZE_ADDR 0x00100004 // The size of the binary
-#define FLASH_BASE_ADDR  0x00200000 // Where OpenOCD puts the file
+extern uint32_t _STAGING_START;
+extern uint32_t _STAGING_END;
+
+int32_t copy_flash(uint32_t dstAddr, uint32_t srcAddr, uint32_t imageSize)
+{
+    int32_t status;
+
+    // 16MB max image size
+    if (imageSize == 0 || imageSize > 0x1000000) {
+        xil_printf("ERROR: Invalid binary size. Aborting.\n\r");
+        return XST_FAILURE;
+    }
+
+    // Make sure the source address is within the staging zone
+    if (srcAddr < (uint32_t)&_STAGING_START || srcAddr > (uint32_t)&_STAGING_END) {
+        xil_printf("ERROR: Invalid source address, outside of DDR region.\n\r");
+        return XST_FAILURE;
+    }
+
+    xil_printf("Image size: %d\n\r", imageSize);
+    xil_printf("Starting Flash Write...\n\r");
+
+    status = flasherProgram(dstAddr, srcAddr, imageSize);
+    if (status != XST_SUCCESS) {
+        xil_printf("FAILED LOADING QSPI\n\r");
+        return XST_FAILURE;
+    }
+
+    return XST_SUCCESS;
+}
 
 int main() {
     uint32_t imageSize = 0;
@@ -21,28 +48,21 @@ int main() {
     flasherInit();
 
     // Clear start and done flags
-    *(volatile uint32_t*)START_FLAG_ADDR = 0x00;
+    CONFIG_REGISTER->START = 0x00;
 
     xil_printf("Flasher Ready. Waiting for JTAG upload...\n\r");
 
     // Wait for something (OpenOCD) to poke the Start Register
-    while(*(volatile uint32_t*)START_FLAG_ADDR == 0);
+    while(CONFIG_REGISTER->START == 0);
 
     // Get the size of what was written
-    imageSize = *(volatile uint32_t *)BINARY_SIZE_ADDR;
-    // 16MB max image size
-    if (imageSize == 0 || imageSize > 0x1000000) {
-        xil_printf("ERROR: Invalid binary size. Aborting.\n\r");
-        return 0;
-    }
+    imageSize = CONFIG_REGISTER->IMAGE_SIZE;
 
-    xil_printf("Image size: %d\n\r", imageSize);
-    xil_printf("Starting Flash Write...\n\r");
-
-    status = flasherProgram(0x00, (uint8_t *)FLASH_BASE_ADDR, imageSize);
+    status = copy_flash(QSPI_ADDR, (uint32_t)&_STAGING_START, imageSize);
     if (status != XST_SUCCESS) {
-        xil_printf("FAILED LOADING QSPI\n\r");
-        return 0;
+        xil_printf("Failed to copy image to flash: (addr: 0x%08X, size: %d)",
+            &_STAGING_START, imageSize);
+            return 0;
     }
 
     xil_printf("\n\r******************************************\n\r");

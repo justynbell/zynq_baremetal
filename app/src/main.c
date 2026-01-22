@@ -48,7 +48,7 @@ static void vTestTask1(void *pvParameters)
     (void)pvParameters;
 
     while (1) {
-        xil_printf("thread1 QSPI4!\n\r");
+        xil_printf("thread1 QSPI8!\n\r");
         vTaskDelay(pdMS_TO_TICKS(250));
     }
 }
@@ -58,7 +58,7 @@ static void vTestTask2(void *pvParameters)
     (void)pvParameters;
 
     while (1) {
-        xil_printf("thread2 QSPI4!\n\r");
+        xil_printf("thread2 QSPI8!\n\r");
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

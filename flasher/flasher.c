@@ -218,14 +218,14 @@ s32 flashRead(uint32_t address, uint8_t *rdPtr, uint32_t size)
 }
 
 // Function to program a large buffer from DDR to Flash
-s32 flasherProgram(u32 flashAddr, u8 *sourceAddr, u32 byteCount) {
+s32 flasherProgram(u32 flashAddr, u32 sourceAddr, u32 byteCount) {
 	s32 status = XST_SUCCESS;
     u32 left = byteCount;
     u32 currAddr = flashAddr;
 	u32 percent;
 	u32 pagesProcessed;
 	u32 totalSize;
-    u8 *currSource = sourceAddr;
+    u8 *currSource = (u8 *)sourceAddr;
 
     xil_printf("Erasing needed sectors...\n\r");
 
@@ -303,7 +303,7 @@ s32 flasherProgram(u32 flashAddr, u8 *sourceAddr, u32 byteCount) {
 
 	left = byteCount;
 	currAddr = flashAddr;
-	currSource = sourceAddr;
+	currSource = (u8 *)sourceAddr;
 	pagesProcessed = 0;
 	while (left > 0) {
 		// Verify pages if possible
