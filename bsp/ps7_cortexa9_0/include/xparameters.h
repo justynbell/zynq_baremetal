@@ -18,19 +18,15 @@
 
 #include "xparameters_ps.h"
 
+/* Platform specific definitions */
+#define PLATFORM_ZYNQ
+ 
+/******************************************************************/
 #define STDIN_BASEADDRESS 0xE0000000
 #define STDOUT_BASEADDRESS 0xE0000000
 
 /******************************************************************/
 
-/* Platform specific definitions */
-#define PLATFORM_ZYNQ
- 
-/* Definitions for sleep timer configuration */
-#define XSLEEP_TIMER_IS_DEFAULT_TIMER
- 
- 
-/******************************************************************/
 /* Definitions for driver AUDIO_STREAM_PWM */
 #define XPAR_AUDIO_STREAM_PWM_NUM_INSTANCES 1
 
@@ -591,11 +587,4 @@
 
 /******************************************************************/
 
-/* Xilinx FAT File System Library (XilFFs) User Settings */
-#define FILE_SYSTEM_INTERFACE_SD
-#define FILE_SYSTEM_USE_MKFS
-#define FILE_SYSTEM_NUM_LOGIC_VOL 2
-#define FILE_SYSTEM_USE_STRFUNC 0
-#define FILE_SYSTEM_SET_FS_RPATH 0
-#define FILE_SYSTEM_WORD_ACCESS
 #endif  /* end of protection macro */

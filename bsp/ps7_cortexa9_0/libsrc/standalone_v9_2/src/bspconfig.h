@@ -5,7 +5,7 @@
 * Version: 2024.2
 * DO NOT EDIT.
 *
-* Copyright (C) 2010-2025 Xilinx, Inc. All Rights Reserved.
+* Copyright (C) 2010-2026 Xilinx, Inc. All Rights Reserved.
 * SPDX-License-Identifier: MIT 
 
 * 
@@ -13,12 +13,13 @@
 *
 *******************************************************************/
 
-#ifndef BSPCONFIG_H  /* prevent circular inclusions */
-#define BSPCONFIG_H  /* by using protection macros */
+#ifndef __BSPCONFIG_H_
+#define __BSPCONFIG_H_
 
-#define MICROBLAZE_PVR_NONE
-
-/* Definition for hard-float ABI */
-#define FPU_HARD_FLOAT_ABI_ENABLED 1
+/*
+ * Definition to indicate that current BSP is a FreeRTOS BSP which can be used to
+ * distinguish between standalone BSP and FreeRTOS BSP.
+ */
+#define FREERTOS_BSP
 
 #endif /*end of __BSPCONFIG_H_*/
