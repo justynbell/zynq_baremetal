@@ -47,7 +47,8 @@ SECTIONS
 {
 .text : {
    . = ALIGN(2048);
-   KEEP (*(.vectors))
+   *(.freertos_vectors);
+   *(.vectors)
    *(.boot)
    *(.text)
    *(.text.*)

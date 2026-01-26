@@ -5,7 +5,7 @@ BUILD_DIR := build
 CC := arm-none-eabi-gcc
 CFLAGS := -Wall -O0 -g3 -fmessage-length=0
 CC_FLAGS := -MMD -MP -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard
-LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -lxil -llwip4 -lfreertos -lgcc -lc -lm -Wl,--end-group
+LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -llwip4 -lfreertos -lxil -lgcc -lc -lm -Wl,-Map=$(BUILD_DIR)/app.map -Wl,--end-group
 
 # Application Source Files #
 c_SOURCES := $(wildcard $(SRC_DIR)/*.c)

@@ -101,7 +101,9 @@ print_ip_settings(ip_addr_t *ip, ip_addr_t *mask, ip_addr_t *gw)
 #endif
 int main()
 {
-	xil_printf("Starting\n");
+	xil_printf("Starting\n\r");
+	vPortInstallFreeRTOSVectorTable();
+
 	sys_thread_new("main_thrd", (void(*)(void*))main_thread, 0,
 	                THREAD_STACKSIZE,
 	                DEFAULT_THREAD_PRIO);
