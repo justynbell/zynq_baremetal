@@ -117,6 +117,11 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 1
 
 #define configUSE_TICKLESS_IDLE	0
+/* 
+ * This needs to be NULL while debugging with GDB, if it's set to
+ * the "default" value FreeRTOS has (prvTaskExitError(), it causes
+ * stack unwinding issues for the debugger)
+ */
 #define configTASK_RETURN_ADDRESS    NULL
 #define INCLUDE_vTaskPrioritySet             1
 #define INCLUDE_uxTaskPriorityGet            1
