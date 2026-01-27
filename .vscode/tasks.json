@@ -57,7 +57,7 @@
             "command": "openocd",
             "args": [
                 "-f", "arty-z7.cfg",
-                "-c", "init; pld load 0 ../system.bit; exit"
+                "-c", "init; pld load zynq.cpu0 ../system.bit; exit"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/openocd"
