@@ -117,7 +117,7 @@
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 1
 
 #define configUSE_TICKLESS_IDLE	0
-#define configTASK_RETURN_ADDRESS    prvTaskExitError
+#define configTASK_RETURN_ADDRESS    NULL
 #define INCLUDE_vTaskPrioritySet             1
 #define INCLUDE_uxTaskPriorityGet            1
 #define INCLUDE_vTaskDelete                  1

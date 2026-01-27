@@ -3,6 +3,8 @@
 BOOT.BIN
 bsp/ps7_cortexa9_0/lib/*
 !bsp/ps7_cortexa9_0/lib/.keep
+bsp/ps7_cortexa9_0/include/*
+!bsp/ps7_cortexa9_0/include/xparameters.h
 
 fsbl/fsbl.elf
 
