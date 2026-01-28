@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2010 - 2022 Xilinx, Inc.
- * Copyright (C) 2022 - 2024 Advanced Micro Devices, Inc.
+ * Copyright (C) 2010 - 2019 Xilinx, Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
@@ -123,10 +122,11 @@
 #define PHY_DETECT_MASK 					0x1808
 #define PHY_MARVELL_IDENTIFIER				0x0141
 #define PHY_TI_IDENTIFIER					0x2000
-#define PHY_ADI_IDENTIFIER				0x0283
 #define PHY_REALTEK_IDENTIFIER				0x001c
 #define PHY_XILINX_PCS_PMA_ID1			0x0174
 #define PHY_XILINX_PCS_PMA_ID2			0x0C00
+#define PHY_REALTEK_RTL8211E				0xC915
+#define PHY_REALTEK_RTL8211F				0xC916
 
 #define XEMACPS_GMII2RGMII_SPEED1000_FD		0x140
 #define XEMACPS_GMII2RGMII_SPEED100_FD		0x2100
@@ -140,6 +140,15 @@
 #define PHY_STS			0x11
 #define PHY_TI_CR		0x10
 #define PHY_TI_CFG4		0x31
+
+#define RTL8211F_PAGSR              (0x1f)
+#define RTL8211F_PHYSR              (0x1a)
+#define RTL8211F_PHYSR_PAGE         (0xa43)
+#define RTL8211F_PHYSR_LINK_MASK    (0x0004)
+#define RTL8211F_PHYSR_SPEED_MASK   (0x0030)
+#define RTL8211F_PHYSR_1000         (0x0020)
+#define RTL8211F_PHYSR_100          (0x0010)
+#define RTL8211F_PHYSR_10           (0x0000)
 
 #define PHY_REGCR_ADDR	0x001F
 #define PHY_REGCR_DATA	0x401F
@@ -157,12 +166,22 @@
 #define SLCR_ADDR_GEM_RST_CTRL	(XPS_SYS_CTRL_BASEADDR + 0x214)
 #define EMACPS_SLCR_DIV_MASK	0xFC0FC0FF
 
+#if XPAR_GIGE_PCS_PMA_1000BASEX_CORE_PRESENT == 1 || \
+	XPAR_GIGE_PCS_PMA_SGMII_CORE_PRESENT == 1
+#define PCM_PMA_CORE_PRESENT
+#else
+#undef PCM_PMA_CORE_PRESENT
+#endif
+
+#ifdef PCM_PMA_CORE_PRESENT
+#define IEEE_CTRL_RESET                         0x9140
 #define IEEE_CTRL_ISOLATE_DISABLE               0xFBFF
+#endif
 
 u32_t phymapemac0[32];
 u32_t phymapemac1[32];
 
-#if defined (CONFIG_LINKSPEED_AUTODETECT)
+#if defined (PCM_PMA_CORE_PRESENT) || defined (CONFIG_LINKSPEED_AUTODETECT)
 static u32_t get_IEEE_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr);
 #endif
 static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed);
@@ -171,49 +190,49 @@ static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed);
 static u32_t configure_IEEE_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr, u32_t speed);
 #endif
 
-static void phy_identify(XEmacPs *xemacpsp, u32_t phy_addr, u32_t emacnum)
+#ifdef PCM_PMA_CORE_PRESENT
+u32_t phy_setup_emacps (XEmacPs *xemacpsp, u32_t phy_addr)
 {
-	u16_t phy_reg;
+	u32_t link_speed;
+	u16_t regval;
 	u16_t phy_id;
 
-	XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_DETECT_REG,
-			&phy_reg);
-	XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_IDENTIFIER_1_REG,
-			&phy_id);
+	if(phy_addr == 0) {
+		for (phy_addr = 31; phy_addr > 0; phy_addr--) {
+			XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_IDENTIFIER_1_REG,
+					&phy_id);
 
-	if (((phy_reg != 0xFFFF) &&
-	     ((phy_reg & PHY_DETECT_MASK) == PHY_DETECT_MASK)) ||
-	    (phy_id == PHY_XILINX_PCS_PMA_ID1)) {
-		/* Found a valid PHY address */
-		LWIP_DEBUGF(NETIF_DEBUG, ("XEmacPs detect_phy: PHY detected at address %d.\r\n",
-					  phy_addr));
-		if (emacnum == 0) {
-			phymapemac0[phy_addr] = TRUE;
-		} else {
-			phymapemac1[phy_addr] = TRUE;
-		}
-
-		XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_IDENTIFIER_1_REG,
-				&phy_reg);
-		if ((phy_reg != PHY_MARVELL_IDENTIFIER) &&
-		    (phy_reg != PHY_TI_IDENTIFIER) &&
-		    (phy_reg != PHY_REALTEK_IDENTIFIER) &&
-		    (phy_reg != PHY_ADI_IDENTIFIER)) {
-			xil_printf("WARNING: Not a Marvell or TI or Realtek or Xilinx PCS PMA Ethernet PHY or ADI Ethernet PHY. Please verify the initialization sequence\r\n");
+			if (phy_id == PHY_XILINX_PCS_PMA_ID1) {
+				XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_IDENTIFIER_2_REG,
+						&phy_id);
+				if (phy_id == PHY_XILINX_PCS_PMA_ID2) {
+					/* Found a valid PHY address */
+					LWIP_DEBUGF(NETIF_DEBUG, ("XEmacPs detect_phy: PHY detected at address %d.\r\n",
+							phy_addr));
+					break;
+				}
+			}
 		}
 	}
+
+	link_speed = get_IEEE_phy_speed(xemacpsp, phy_addr);
+	if (link_speed == 1000)
+		SetUpSLCRDivisors(xemacpsp->Config.BaseAddress,1000);
+	else if (link_speed == 100)
+		SetUpSLCRDivisors(xemacpsp->Config.BaseAddress,100);
+	else
+		SetUpSLCRDivisors(xemacpsp->Config.BaseAddress,10);
+
+	xil_printf("link speed for phy address %d: %d\r\n", phy_addr, link_speed);
+	return link_speed;
 }
 
-static u32_t get_Xilinx_pcs_pma_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
+static u32_t get_IEEE_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 {
-
-#if XPAR_GIGE_PCS_PMA_1000BASEX_CORE_PRESENT == 1 || \
-    XPAR_GIGE_PCS_PMA_SGMII_CORE_PRESENT == 1 || defined(SDT)
 	u16_t temp;
-#endif
-
 	u16_t control;
 	u16_t status;
+	u16_t partner_capabilities;
 
 	xil_printf("Start PHY autonegotiation \r\n");
 
@@ -232,7 +251,7 @@ static u32_t get_Xilinx_pcs_pma_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 																&status);
 	}
 	xil_printf("autonegotiation complete \r\n");
-#ifndef SDT
+
 #if XPAR_GIGE_PCS_PMA_1000BASEX_CORE_PRESENT == 1
 	XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_PAGE_ADDRESS_REGISTER, 1);
 	XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_PARTNER_ABILITIES_1_REG_OFFSET, &temp);
@@ -266,79 +285,44 @@ static u32_t get_Xilinx_pcs_pma_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 		return 10;
 	}
 #endif
-#else
-	if (strcmp(xemacpsp->Config.PhyType, "1000base-x") == 0) {
-		XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_PAGE_ADDRESS_REGISTER, 1);
-		XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_PARTNER_ABILITIES_1_REG_OFFSET, &temp);
-		if ((temp & 0x0020) == 0x0020) {
-			XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_PAGE_ADDRESS_REGISTER, 0);
-			return 1000;
-		}
-		else {
-			XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_PAGE_ADDRESS_REGISTER, 0);
-			xil_printf("Link error, temp = %x\r\n", temp);
-			return 0;
-		}
-	}
-	if (strcmp(xemacpsp->Config.PhyType, "sgmii") == 0) {
-		xil_printf("Waiting for Link to be up; Polling for SGMII core Reg \r\n");
-		XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_PARTNER_ABILITIES_1_REG_OFFSET, &temp);
-		while(!(temp & 0x8000)) {
-			XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_PARTNER_ABILITIES_1_REG_OFFSET, &temp);
-		}
-		if((temp & 0x0C00) == 0x0800) {
-			return 1000;
-		}
-		else if((temp & 0x0C00) == 0x0400) {
-			return 100;
-		}
-		else if((temp & 0x0C00) == 0x0000) {
-			return 10;
-		} else {
-			xil_printf("get_IEEE_phy_speed(): Invalid speed bit value, Defaulting to Speed = 10 Mbps\r\n");
-			XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, &temp);
-			XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, 0x0100);
-			return 10;
-		}
-	}
-#endif
-	return 0;
+
 }
 
+#else /*PCM_PMA_CORE_PRESENT not defined, GMII/RGMII case*/
 void detect_phy(XEmacPs *xemacpsp)
 {
-	u32_t phy_addr = 0;
+	u16_t phy_reg;
+	u32_t phy_addr;
 	u32_t emacnum;
 
 	if (xemacpsp->Config.BaseAddress == XPAR_XEMACPS_0_BASEADDR)
 		emacnum = 0;
 	else
 		emacnum = 1;
+	for (phy_addr = 31; phy_addr > 0; phy_addr--) {
+		XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_DETECT_REG,
+							&phy_reg);
 
-#ifdef SDT
-	phy_addr = xemacpsp->Config.PhyAddr;
-#endif
+		if ((phy_reg != 0xFFFF) &&
+			((phy_reg & PHY_DETECT_MASK) == PHY_DETECT_MASK)) {
+			/* Found a valid PHY address */
+			LWIP_DEBUGF(NETIF_DEBUG, ("XEmacPs detect_phy: PHY detected at address %d.\r\n",
+																	phy_addr));
+			if (emacnum == 0)
+				phymapemac0[phy_addr] = TRUE;
+			else
+				phymapemac1[phy_addr] = TRUE;
 
-	if (phy_addr != 0) {
-		phy_identify(xemacpsp, phy_addr, emacnum);
-	} else {
-		for (phy_addr = 31; phy_addr > 0; phy_addr--) {
-			phy_identify(xemacpsp, phy_addr, emacnum);
+			XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_IDENTIFIER_1_REG,
+							&phy_reg);
+			if ((phy_reg != PHY_MARVELL_IDENTIFIER) &&
+				(phy_reg != PHY_TI_IDENTIFIER) &&
+				(phy_reg != PHY_REALTEK_IDENTIFIER)) {
+				xil_printf("WARNING: Not a Marvell or TI or Realtek Ethernet PHY. Please verify the initialization sequence\r\n");
+			}
 		}
 	}
 }
-
-#ifdef SGMII_FIXED_LINK
-u32_t pcs_setup_emacps (XEmacPs *xemacps)
-{
-	u32_t link_speed;
-
-	SetUpSLCRDivisors(xemacps->Config.BaseAddress,1000);
-	link_speed = 1000;
-	sleep(1);
-	return link_speed;
-}
-#endif
 
 u32_t phy_setup_emacps (XEmacPs *xemacpsp, u32_t phy_addr)
 {
@@ -439,7 +423,7 @@ static u32_t get_TI_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_TI_CR, PHY_TI_CRVAL);
 	RetStatus = XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_TI_CR, (u16_t *)&phyregtemp);
 	if (RetStatus != XST_SUCCESS) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("Error writing to 0x10 \n\r"));
+		xil_printf("Error writing to 0x10 \n\r");
 		return XST_FAILURE;
 	}
 
@@ -450,7 +434,7 @@ static u32_t get_TI_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_REGCR, PHY_REGCR_DATA);
 	RetStatus = XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_ADDAR, 0xA8);
 	if (RetStatus != XST_SUCCESS) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("Error in tuning"));
+		xil_printf("Error in tuning");
 		return XST_FAILURE;
 	}
 
@@ -460,7 +444,7 @@ static u32_t get_TI_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_REGCR, PHY_REGCR_DATA);
 	RetStatus = XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_ADDAR, (u16_t *)&phyregtemp);
 	if (RetStatus != XST_SUCCESS) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("Error in tuning"));
+		xil_printf("Error in tuning");
 		return XST_FAILURE;
 	}
 
@@ -470,7 +454,7 @@ static u32_t get_TI_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_REGCR, PHY_REGCR_DATA);
 	RetStatus = XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_ADDAR, 0xD3);
 	if (RetStatus != XST_SUCCESS) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("Error in tuning"));
+		xil_printf("Error in tuning");
 		return XST_FAILURE;
 	}
 
@@ -480,7 +464,7 @@ static u32_t get_TI_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	XEmacPs_PhyWrite(xemacpsp, phy_addr, PHY_REGCR, PHY_REGCR_DATA);
 	RetStatus = XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_ADDAR, (u16_t *)&phyregtemp);
 	if (RetStatus != XST_SUCCESS) {
-		LWIP_DEBUGF(NETIF_DEBUG, ("Error in tuning"));
+		xil_printf("Error in tuning");
 		return XST_FAILURE;
 	}
 
@@ -522,7 +506,7 @@ static u32_t get_TI_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 		sleep(1);
 		timeout_counter++;
 
-		if (timeout_counter == 5) {
+		if (timeout_counter == 30) {
 			xil_printf("Auto negotiation error \r\n");
 			return XST_FAILURE;
 		}
@@ -607,7 +591,7 @@ static u32_t get_Marvell_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 						IEEE_COPPER_SPECIFIC_STATUS_REG_2,  &temp);
 		timeout_counter++;
 
-		if (timeout_counter == 5) {
+		if (timeout_counter == 30) {
 			xil_printf("Auto negotiation error \r\n");
 			return XST_FAILURE;
 		}
@@ -638,6 +622,7 @@ static u32_t get_Realtek_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	u16_t status_speed;
 	u32_t timeout_counter = 0;
 	u32_t temp_speed;
+	u16_t phy_identity2 = 0;
 
 	xil_printf("Start PHY autonegotiation \r\n");
 
@@ -677,151 +662,6 @@ static u32_t get_Realtek_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 
 	while ( !(status & IEEE_STAT_AUTONEGOTIATE_COMPLETE) ) {
 		sleep(1);
-		timeout_counter++;
-
-		if (timeout_counter == 5) {
-			xil_printf("Auto negotiation error \r\n");
-			return XST_FAILURE;
-		}
-		XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_STATUS_REG_OFFSET, &status);
-	}
-	xil_printf("autonegotiation complete \r\n");
-
-	XEmacPs_PhyRead(xemacpsp, phy_addr,IEEE_SPECIFIC_STATUS_REG,
-					&status_speed);
-	if (status_speed & 0x400) {
-		temp_speed = status_speed & IEEE_SPEED_MASK;
-
-		if (temp_speed == IEEE_SPEED_1000)
-			return 1000;
-		else if(temp_speed == IEEE_SPEED_100)
-			return 100;
-		else
-			return 10;
-	}
-
-	return XST_FAILURE;
-}
-
-#define ADIN1300_PHY_CTRL1	0x0012
-#define ADIN1300_PHY_CTRL2	0x0016
-#define ADIN1300_PHY_CTRL3	0x0017
-#define ADIN1300_EXT_ADDR	0x0010
-#define ADIN1300_EXT_DATA	0x0011
-#define ADIN1300_PHY_STS1	0x001A
-
-#define ADIN1300_RGMII_CFG	0xFF23
-#define ADIN1300_RMII_CFG	0xFF24
-
-#define ADIN1300_AUTO_MDI_EN	0x400
-#define ADIN1300_MAN_MDIX_EN	0x200
-#define ADIN1300_DIAG_CLK_EN	0x4
-
-#define ADIN1300_LINKING_EN	0x2000
-
-#define ADIN1300_RGMII_EN		0x0001
-#define ADIN1300_RGMII_TXRX_TUNING_EN	0x0006
-#define ADIN1300_RGMII_RX_DELAY_MASK	0x01C0
-#define ADIN1300_RGMII_TX_DELAY_MASK	0x0038
-#define ADIN1300_RGMII_RX_DELAY_VAL_2000PS	0x0
-#define ADIN1300_RGMII_TX_DELAY_VAL_2000PS	0x0
-
-#define ADIN1300_SPEED_RETRY_MASK	0x1C00
-#define ADIN1300_SPEED_RETRY_FOUR	0x1000
-#define ADIN1300_DOWNSPEED_EN		0x0C00
-
-#define ADIN1300_AN_DONE	0x1000
-#define ADIN1300_SPEED_MASK	0x0380
-#define ADIN1300_SPEED_1G	0x0280
-#define ADIN1300_SPEED_100M	0x0180
-#define ADIN1300_SPEED_10M	0x0080
-
-static u32_t get_Adi_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
-{
-	u16_t temp;
-	u16_t control;
-	u16_t status;
-	u16_t status_speed;
-	u16_t phyreg;
-	u32_t timeout_counter = 0;
-	u32_t temp_speed;
-
-	xil_printf("Start PHY autonegotiation \r\n");
-
-	/* PHY soft reset */
-	XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, &control);
-	control |= IEEE_CTRL_RESET_MASK;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, control);
-
-	/* Delay for PHY to be accessible */
-	sleep(1);
-
-	/* RGMII TX/RX tuning */
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_EXT_ADDR, ADIN1300_RGMII_CFG);
-	XEmacPs_PhyRead(xemacpsp, phy_addr, ADIN1300_EXT_DATA, &phyreg);
-	phyreg |= (ADIN1300_RGMII_EN | ADIN1300_RGMII_TXRX_TUNING_EN);
-	phyreg &= ~(ADIN1300_RGMII_RX_DELAY_MASK | ADIN1300_RGMII_TX_DELAY_MASK);
-	phyreg |= ((ADIN1300_RGMII_RX_DELAY_VAL_2000PS << 6) | (ADIN1300_RGMII_TX_DELAY_VAL_2000PS << 3));
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_EXT_ADDR, ADIN1300_RGMII_CFG);
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_EXT_DATA, phyreg);
-
-	/* Downspeed */
-	XEmacPs_PhyRead(xemacpsp, phy_addr, ADIN1300_PHY_CTRL3, &phyreg);
-	phyreg &= ~(ADIN1300_SPEED_RETRY_MASK);
-	phyreg |= ADIN1300_SPEED_RETRY_FOUR;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_PHY_CTRL3, phyreg);
-	XEmacPs_PhyRead(xemacpsp, phy_addr, ADIN1300_PHY_CTRL2, &phyreg);
-	phyreg |= ADIN1300_DOWNSPEED_EN;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_PHY_CTRL2, phyreg);
-
-	/* Diag clock disable */
-	XEmacPs_PhyRead(xemacpsp, phy_addr, ADIN1300_PHY_CTRL1, &phyreg);
-	phyreg &= ~ADIN1300_DIAG_CLK_EN;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_PHY_CTRL1, phyreg);
-	/* Linking Enable */
-	XEmacPs_PhyRead(xemacpsp, phy_addr, ADIN1300_PHY_CTRL3, &phyreg);
-	phyreg |= ADIN1300_LINKING_EN;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_PHY_CTRL3, phyreg);
-	/* Auto MDIX by default */
-	XEmacPs_PhyRead(xemacpsp, phy_addr, ADIN1300_PHY_CTRL1, &phyreg);
-	phyreg &= ~ADIN1300_MAN_MDIX_EN;
-	phyreg |= ADIN1300_AUTO_MDI_EN;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, ADIN1300_PHY_CTRL1, phyreg);
-
-	XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_AUTONEGO_ADVERTISE_REG, &control);
-	control |= IEEE_ASYMMETRIC_PAUSE_MASK;
-	control |= IEEE_PAUSE_MASK;
-	control |= ADVERTISE_100;
-	control |= ADVERTISE_10;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_AUTONEGO_ADVERTISE_REG, control);
-
-	XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_1000_ADVERTISE_REG_OFFSET,
-					&control);
-	control |= ADVERTISE_1000;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_1000_ADVERTISE_REG_OFFSET,
-					control);
-
-	XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, &control);
-	control |= IEEE_CTRL_AUTONEGOTIATE_ENABLE;
-	control |= IEEE_STAT_AUTONEGOTIATE_RESTART;
-	XEmacPs_PhyWrite(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, control);
-
-	while (1) {
-		XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_CONTROL_REG_OFFSET, &control);
-		if (control & IEEE_CTRL_RESET_MASK)
-			continue;
-		else
-			break;
-	}
-
-	XEmacPs_PhyRead(xemacpsp, phy_addr, IEEE_STATUS_REG_OFFSET, &status);
-
-	xil_printf("Waiting for PHY to complete autonegotiation.\r\n");
-
-	while ( !(status & IEEE_STAT_AUTONEGOTIATE_COMPLETE) ) {
-		sleep(1);
-		XEmacPs_PhyRead(xemacpsp, phy_addr,
-						IEEE_COPPER_SPECIFIC_STATUS_REG_2,  &temp);
 		timeout_counter++;
 
 		if (timeout_counter == 30) {
@@ -832,20 +672,54 @@ static u32_t get_Adi_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 	}
 	xil_printf("autonegotiation complete \r\n");
 
-	XEmacPs_PhyRead(xemacpsp, phy_addr,ADIN1300_PHY_STS1,
-					&status_speed);
-	if (status_speed & ADIN1300_AN_DONE) {
-		temp_speed = status_speed & ADIN1300_SPEED_MASK;
+	//Identify PHY model
+	XEmacPs_PhyRead(xemacpsp, phy_addr, PHY_IDENTIFIER_2_REG,
+					&phy_identity2);
 
-		if (temp_speed == ADIN1300_SPEED_1G)
-			return 1000;
-		else if(temp_speed == ADIN1300_SPEED_100M)
-			return 100;
-		else
-			return 10;
+	switch (phy_identity2)
+	{
+		case PHY_REALTEK_RTL8211F:
+		{
+			xil_printf("detected RTL8211F \r\n");
+			//Switch to page 0xA43
+			XEmacPs_PhyWrite(xemacpsp, phy_addr, RTL8211F_PAGSR, RTL8211F_PHYSR_PAGE);
+			XEmacPs_PhyRead(xemacpsp, phy_addr, RTL8211F_PHYSR, &status_speed);
+			//Switch back to default page
+			XEmacPs_PhyWrite(xemacpsp, phy_addr, RTL8211F_PAGSR, 0);
+			//If there is link
+			if (status_speed & RTL8211F_PHYSR_LINK_MASK) {
+				temp_speed = status_speed & RTL8211F_PHYSR_SPEED_MASK;
+
+				if (temp_speed == RTL8211F_PHYSR_1000)
+					return 1000;
+				else if(temp_speed == RTL8211F_PHYSR_100)
+					return 100;
+				else
+					return 10;
+			}
+			break;
+		}
+		case PHY_REALTEK_RTL8211E:
+			xil_printf("detected RTL8211E \r\n");
+			//RTL8211E fall-back to default Realtek behaviour
+		default:
+		{
+			XEmacPs_PhyRead(xemacpsp, phy_addr,IEEE_SPECIFIC_STATUS_REG,
+							&status_speed);
+			if (status_speed & 0x400) {
+				temp_speed = status_speed & IEEE_SPEED_MASK;
+
+				if (temp_speed == IEEE_SPEED_1000)
+					return 1000;
+				else if(temp_speed == IEEE_SPEED_100)
+					return 100;
+				else
+					return 10;
+			}
+			break;
+		}
 	}
-
-	return XST_SUCCESS;
+	return XST_FAILURE;
 }
 
 static u32_t get_IEEE_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
@@ -859,10 +733,6 @@ static u32_t get_IEEE_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr)
 		RetStatus = get_TI_phy_speed(xemacpsp, phy_addr);
 	} else if (phy_identity == PHY_REALTEK_IDENTIFIER) {
 		RetStatus = get_Realtek_phy_speed(xemacpsp, phy_addr);
-	} else if (phy_identity == PHY_XILINX_PCS_PMA_ID1) {
-		RetStatus = get_Xilinx_pcs_pma_phy_speed(xemacpsp, phy_addr);
-	} else if (phy_identity == PHY_ADI_IDENTIFIER) {
-		RetStatus = get_Adi_phy_speed(xemacpsp, phy_addr);
 	} else {
 		RetStatus = get_Marvell_phy_speed(xemacpsp, phy_addr);
 	}
@@ -961,10 +831,10 @@ static u32_t configure_IEEE_phy_speed(XEmacPs *xemacpsp, u32_t phy_addr, u32_t s
 	return 0;
 }
 #endif
+#endif /*PCM_PMA_CORE_PRESENT*/
 
 static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed)
 {
-#ifndef SDT
 	volatile UINTPTR slcrBaseAddress;
 	u32_t SlcrDiv0 = 0;
 	u32_t SlcrDiv1 = 0;
@@ -974,7 +844,7 @@ static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed)
 	u32_t CrlApbDiv0 = 0;
 	u32_t CrlApbDiv1 = 0;
 	u32_t CrlApbGemCtrl;
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
+#if EL1_NONSECURE
 	u32_t ClkId;
 #endif
 
@@ -1123,7 +993,7 @@ static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed)
 		}
 
 		if (CrlApbDiv0 != 0 && CrlApbDiv1 != 0) {
-		#if defined (__aarch64__) && (EL1_NONSECURE == 1)
+		#if EL1_NONSECURE
 			XSmc_OutVar RegRead;
 			RegRead = Xil_Smc(MMIO_READ_SMC_FID, (u64)(CrlApbBaseAddr),
 								0, 0, 0, 0, 0, 0);
@@ -1135,7 +1005,7 @@ static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed)
 			CrlApbGemCtrl |= CrlApbDiv0 << CRL_APB_GEM_DIV0_SHIFT;
 			CrlApbGemCtrl &= ~CRL_APB_GEM_DIV1_MASK;
 			CrlApbGemCtrl |= CrlApbDiv1 << CRL_APB_GEM_DIV1_SHIFT;
-		#if defined (__aarch64__) && (EL1_NONSECURE == 1)
+		#if EL1_NONSECURE
 			Xil_Smc(MMIO_WRITE_SMC_FID, (u64)(CrlApbBaseAddr) | ((u64)(0xFFFFFFFF) << 32),
 				(u64)CrlApbGemCtrl, 0, 0, 0, 0, 0);
 			do {
@@ -1152,90 +1022,50 @@ static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed)
 		/* Setup divisors in CRL for Versal */
 		if (mac_baseaddr == VERSAL_EMACPS_0_BASEADDR) {
 			CrlApbBaseAddr = VERSAL_CRL_GEM0_REF_CTRL;
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
+#if EL1_NONSECURE
 			ClkId = CLK_GEM0_REF;
 #endif
 		} else if (mac_baseaddr == VERSAL_EMACPS_1_BASEADDR) {
 			CrlApbBaseAddr = VERSAL_CRL_GEM1_REF_CTRL;
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
-			ClkId = CLK_GEM1_REF;
-#endif
-		} else if (mac_baseaddr == VERSAL_NET_EMACPS_0_BASEADDR) {
-#ifdef VERSAL_NET_CRL_GEM0_REF_CTRL
-			CrlApbBaseAddr = VERSAL_NET_CRL_GEM0_REF_CTRL;
-#endif
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
-			ClkId = CLK_GEM0_REF;
-#endif
-		} else if (mac_baseaddr == VERSAL_NET_EMACPS_1_BASEADDR) {
-#ifdef VERSAL_NET_CRL_GEM1_REF_CTRL
-			CrlApbBaseAddr = VERSAL_NET_CRL_GEM1_REF_CTRL;
-#endif
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
+#if EL1_NONSECURE
 			ClkId = CLK_GEM1_REF;
 #endif
 		}
 
 		if (speed == 1000) {
 			if (mac_baseaddr == VERSAL_EMACPS_0_BASEADDR) {
-#ifdef XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_0_ENET_SLCR_1000MBPS_DIV0
-				CrlApbDiv0 = XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_0_ENET_SLCR_1000MBPS_DIV0;
+#ifdef XPAR_PSV_ETHERNET_0_ENET_SLCR_1000MBPS_DIV0
+				CrlApbDiv0 = XPAR_PSV_ETHERNET_0_ENET_SLCR_1000MBPS_DIV0;
 #endif
 			} else if (mac_baseaddr == VERSAL_EMACPS_1_BASEADDR) {
-#ifdef XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_1_ENET_SLCR_1000MBPS_DIV0
-				CrlApbDiv0 = XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_1_ENET_SLCR_1000MBPS_DIV0;
-#endif
-			} else if (mac_baseaddr == VERSAL_NET_EMACPS_0_BASEADDR) {
-#ifdef XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_0_ENET_SLCR_1000MBPS_DIV0
-				CrlApbDiv0 =  XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_0_ENET_SLCR_1000MBPS_DIV0;
-#endif
-			} else if (mac_baseaddr == VERSAL_NET_EMACPS_1_BASEADDR) {
-#ifdef  XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_1_ENET_SLCR_1000MBPS_DIV0
-				CrlApbDiv0 =  XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_1_ENET_SLCR_1000MBPS_DIV0;
+#ifdef XPAR_PSV_ETHERNET_1_ENET_SLCR_1000MBPS_DIV0
+				CrlApbDiv0 = XPAR_PSV_ETHERNET_1_ENET_SLCR_1000MBPS_DIV0;
 #endif
 			}
 		} else if (speed == 100) {
 			if (mac_baseaddr == VERSAL_EMACPS_0_BASEADDR) {
-#ifdef XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_0_ENET_SLCR_100MBPS_DIV0
-				CrlApbDiv0 = XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_0_ENET_SLCR_100MBPS_DIV0;
+#ifdef XPAR_PSV_ETHERNET_0_ENET_SLCR_100MBPS_DIV0
+				CrlApbDiv0 = XPAR_PSV_ETHERNET_0_ENET_SLCR_100MBPS_DIV0;
 #endif
 			} else if (mac_baseaddr == VERSAL_EMACPS_1_BASEADDR) {
-#ifdef XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_1_ENET_SLCR_100MBPS_DIV0
-				CrlApbDiv0 = XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_1_ENET_SLCR_100MBPS_DIV0;
-#endif
-			} else if (mac_baseaddr == VERSAL_NET_EMACPS_0_BASEADDR) {
-#ifdef XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_0_ENET_SLCR_100MBPS_DIV0
-				CrlApbDiv0 = XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_0_ENET_SLCR_100MBPS_DIV0;
-#endif
-			} else if (mac_baseaddr == VERSAL_NET_EMACPS_1_BASEADDR) {
-#ifdef XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_1_ENET_SLCR_100MBPS_DIV0
-				CrlApbDiv0 = XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_1_ENET_SLCR_100MBPS_DIV0;
+#ifdef XPAR_PSV_ETHERNET_1_ENET_SLCR_100MBPS_DIV0
+				CrlApbDiv0 = XPAR_PSV_ETHERNET_1_ENET_SLCR_100MBPS_DIV0;
 #endif
 			}
 		} else {
 			if (mac_baseaddr == VERSAL_EMACPS_0_BASEADDR) {
-#ifdef XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_0_ENET_SLCR_10MBPS_DIV0
-				CrlApbDiv0 = XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_0_ENET_SLCR_10MBPS_DIV0;
+#ifdef XPAR_PSV_ETHERNET_0_ENET_SLCR_10MBPS_DIV0
+				CrlApbDiv0 = XPAR_PSV_ETHERNET_0_ENET_SLCR_10MBPS_DIV0;
 #endif
 			} else if (mac_baseaddr == VERSAL_EMACPS_1_BASEADDR) {
-#ifdef XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_1_ENET_SLCR_10MBPS_DIV0
-				CrlApbDiv0 = XPAR_VERSAL_CIPS_0_PSPMC_0_PSV_ETHERNET_1_ENET_SLCR_10MBPS_DIV0;
-#endif
-			} else if (mac_baseaddr == VERSAL_NET_EMACPS_0_BASEADDR) {
-#ifdef XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_0_ENET_SLCR_10MBPS_DIV0
-				CrlApbDiv0 = XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_0_ENET_SLCR_10MBPS_DIV0;
-#endif
-			} else if (mac_baseaddr == VERSAL_NET_EMACPS_1_BASEADDR) {
-#ifdef XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_1_ENET_SLCR_10MBPS_DIV0
-				CrlApbDiv0 = XPAR_PSX_WIZARD_0_PSXL_0_PSX_ETHERNET_1_ENET_SLCR_10MBPS_DIV0;
+#ifdef XPAR_PSV_ETHERNET_1_ENET_SLCR_10MBPS_DIV0
+				CrlApbDiv0 = XPAR_PSV_ETHERNET_1_ENET_SLCR_10MBPS_DIV0;
 #endif
 			}
 		}
 
 		if (CrlApbDiv0 != 0) {
-			if ((mac_baseaddr == VERSAL_EMACPS_0_BASEADDR) ||
-			    (mac_baseaddr == VERSAL_EMACPS_1_BASEADDR)) {
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
+#if EL1_NONSECURE
 			Xil_Smc(PM_SET_DIVIDER_SMC_FID, (((u64)CrlApbDiv0 << 32) | ClkId), 0, 0, 0, 0, 0, 0);
 #else
 			CrlApbGemCtrl = Xil_In32(CrlApbBaseAddr);
@@ -1244,24 +1074,10 @@ static void SetUpSLCRDivisors(UINTPTR mac_baseaddr, s32_t speed)
 
 			Xil_Out32(CrlApbBaseAddr, CrlApbGemCtrl);
 #endif
-			} else if((mac_baseaddr == VERSAL_NET_EMACPS_0_BASEADDR) ||
-				  (mac_baseaddr == VERSAL_NET_EMACPS_1_BASEADDR)) {
-#if defined (__aarch64__) && (EL1_NONSECURE == 1)
-			Xil_Smc(PM_SET_DIVIDER_SMC_FID, (((u64)CrlApbDiv0 << 32) | ClkId), 0, 0, 0, 0, 0, 0);
-#else
-			CrlApbGemCtrl = Xil_In32(CrlApbBaseAddr);
-			CrlApbGemCtrl &= ~VERSAL_NET_CRL_GEM_DIV_MASK;
-			CrlApbGemCtrl |= CrlApbDiv0 << VERSAL_NET_CRL_APB_GEM_DIV_SHIFT;
-
-			Xil_Out32(CrlApbBaseAddr, CrlApbGemCtrl);
-#endif
-			}
 		} else {
 			xil_printf("Clock Divisors incorrect - Please check\r\n");
 		}
 	}
-#else
-	xil_printf("Using default Speed from design\r\n");
-#endif
+
 	return;
 }
