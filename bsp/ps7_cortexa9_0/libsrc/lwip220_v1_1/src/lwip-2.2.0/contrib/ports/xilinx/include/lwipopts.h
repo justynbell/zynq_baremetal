@@ -119,6 +119,7 @@
 #define TCP_OVERSIZE TCP_MSS
 
 #define LWIP_DHCP 1
+#define LWIP_AUTOIP 1
 #define LWIP_DHCP_DOES_ACD_CHECK 1
 #define LWIP_ACD 1
 
