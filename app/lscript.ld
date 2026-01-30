@@ -34,7 +34,7 @@ MEMORY
    FLASHER_ZONE : ORIGIN = 0x00100000, LENGTH = 0x00100000 /* 1MB */
    CONFIG_ZONE  : ORIGIN = 0x00200000, LENGTH = 0x00000400 /* 1KB */
    STAGING_ZONE : ORIGIN = 0x00200400, LENGTH = 0x01000000 /* 16MB */
-   APP_ZONE     : ORIGIN = 0x01200400, LENGTH = 0x1EDFFC00 /* ~494MB */
+   APP_ZONE     : ORIGIN = 0x01200800, LENGTH = 0x1EDFF800 /* ~494MB */
 }
 
 /* Specify the default entry point to the program */
@@ -47,7 +47,6 @@ SECTIONS
 {
 .text : {
    . = ALIGN(2048);
-   *(.freertos_vectors);
    *(.vectors)
    *(.boot)
    *(.text)
