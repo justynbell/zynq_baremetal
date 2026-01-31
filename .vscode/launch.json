@@ -20,7 +20,7 @@
                 "monitor arty_z7_reset",
                 "load",
             ],
-            "preLaunchTask": "Build APP"
+            "preLaunchTask": "Build APP",
         },
         {
             "name": "Debug FSBL",
