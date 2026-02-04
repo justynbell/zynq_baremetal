@@ -297,4 +297,5 @@ _SDA2_BASE_ = __sdata2_start + ((__sbss2_end - __sdata2_start) / 2 );
 } > APP_ZONE
 
 _end = .;
+end = .;
 }

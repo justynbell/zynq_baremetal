@@ -2,17 +2,17 @@ BSP_PATH := ../bsp
 SRC_DIR := src
 BUILD_DIR := build
 
-CC := arm-none-eabi-gcc
+CC := arm-none-eabi-g++
 CFLAGS := -Wall -O0 -g3 -fmessage-length=0
 CC_FLAGS := -MMD -MP -mcpu=cortex-a9 -mfpu=vfpv3 -mfloat-abi=hard
-LN_FLAGS := --specs=Xilinx.spec -Wl,-build-id=none -Wl,--start-group -llwip4 -lfreertos -lxil -lgcc -lc -lm -Wl,-Map=$(BUILD_DIR)/app.map -Wl,--end-group
+LN_FLAGS := --specs=Xilinx.spec --specs=nosys.specs -Wl,-build-id=none -Wl,--start-group -llwip4 -lfreertos -lxil -lgcc -lc -lm -Wl,-Map=$(BUILD_DIR)/app.map -Wl,--end-group
 
 # Application Source Files #
-c_SOURCES := $(wildcard $(SRC_DIR)/*.c)
+c_SOURCES := $(wildcard $(SRC_DIR)/*.cpp)
 S_SOURCES := $(wildcard $(SRC_DIR)/*.S)
 
 # Object Files #
-OBJS := $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(c_SOURCES))
+OBJS := $(patsubst $(SRC_DIR)/%.cpp, $(BUILD_DIR)/%.o, $(c_SOURCES))
 OBJS += $(patsubst $(SRC_DIR)/%.S, $(BUILD_DIR)/%.o, $(S_SOURCES))
 
 # Includes
@@ -36,7 +36,7 @@ all: $(EXEC) size
 $(EXEC): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(CC_FLAGS) $(CFLAGS) $(LN_FLAGS) $(LIBPATH) $(LSCRIPT)
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(CC_FLAGS) -c $< -o $@ $(INCLUDEPATH)
 

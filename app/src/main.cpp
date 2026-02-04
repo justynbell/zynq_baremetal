@@ -13,6 +13,8 @@
 #define PLATFORM_EMAC_BASEADDR XPAR_XEMACPS_0_BASEADDR
 #define THREAD_STACKSIZE 1024
 
+static QSpiFlash qspi;
+
 void echo_application_thread(void *);
 
 static struct netif server_netif;
@@ -44,7 +46,7 @@ static void network_thread(void *p)
     xil_printf("-----lwIP Socket Mode Echo server Demo Application ------\r\n");
 
     /* Read the mac from the Arty board */
-    if (qspi_mac_read(mac_ethernet_address) != XST_SUCCESS) {
+    if (qspi.mac_read(mac_ethernet_address) != XST_SUCCESS) {
         xil_printf("Failed to read MAC address from QSPI flash. Using default:\n\r");
     } else {
         xil_printf("MAC address read from QSPI flash:\n\r");
@@ -101,7 +103,7 @@ static void network_thread(void *p)
 static int main_thread(void)
 {
     /* Initialie the QSPI driver */
-    qspi_init();
+    qspi.init();
 
     /* initialize lwIP before calling sys_thread_new */
     lwip_init();
@@ -144,6 +146,7 @@ int main()
                     THREAD_STACKSIZE,
                     DEFAULT_THREAD_PRIO);
     vTaskStartScheduler();
+
     while(1);
     return 0;
 }
