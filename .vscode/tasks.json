@@ -63,6 +63,21 @@
                 "cwd": "${workspaceFolder}/openocd"
             },
             "problemMatcher": []
-        }
+        },
+        {
+            "label": "Flash QSPI",
+            "type": "shell",
+            "command": "openocd",
+            "args": [
+                "-f",
+                "flash_qspi.tcl"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/openocd"
+            },
+            "group": "build",
+            "dependsOn": "Build All",
+            "problemMatcher": []
+        },
     ]
 }

@@ -48,14 +48,6 @@ int connection_index;
 
 u16_t echo_port = 7;
 
-void print_echo_app_header()
-{
-    xil_printf("%20s %6d %s\r\n", "echo server",
-                        echo_port,
-                        "$ telnet <board_ip> 7");
-
-}
-
 /* thread spawned for each connection */
 void process_echo_request(void *p)
 {

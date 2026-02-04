@@ -38,6 +38,11 @@
 #define PROCESSOR_LITTLE_ENDIAN
 #endif
 
+#include <xil_printf.h>
+#define LWIP_DEBUG 0
+#define DHCP_DEBUG LWIP_DBG_OFF
+#define AUTOIP_DEBUG LWIP_DBG_OFF
+
 #define SYS_LIGHTWEIGHT_PROT 1
 
 
@@ -80,6 +85,7 @@
 #define ARP_TABLE_SIZE 10
 #define ARP_QUEUEING 1
 
+#define ICMP 1
 #define ICMP_TTL 255
 
 #define IP_OPTIONS 0
@@ -120,6 +126,9 @@
 
 #define LWIP_DHCP 1
 #define LWIP_AUTOIP 1
+#define LWIP_DHCP_AUTOIP_COOP 1
+#define LWIP_DHCP_AUTOIP_COOP_TRIES 3
+
 #define LWIP_DHCP_DOES_ACD_CHECK 1
 #define LWIP_ACD 1
 

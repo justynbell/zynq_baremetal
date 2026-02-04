@@ -14,7 +14,7 @@
             "searchDir": [
                 "${workspaceFolder}/openocd"
             ],
-            "runToEntryPoint": "_boot",
+            "runToEntryPoint": "main",
             "showDevDebugOutput": "raw",
             "overrideLaunchCommands": [
                 "monitor arty_z7_reset",

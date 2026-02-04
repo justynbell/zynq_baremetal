@@ -2,6 +2,6 @@ the_ROM_image:
 {
     [bootloader] fsbl/fsbl.elf
     [offset = 0x40000] system.bit
-    [load=0x01200400] app/app.elf
+    [load=0x01200800] app/app.elf
     [load=0x00100000] flasher/flasher.elf
 }
